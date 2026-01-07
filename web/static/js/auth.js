@@ -4,28 +4,66 @@
 let authState = {
     isLogged: false,
     username: null,
-    token: null
+    token: null,
+    loginTime: null  // Timestamp de login para tracking de sesión
 };
+
+// Variable global para almacenar la existencia de usuario
+let userExists = false;
 
 /**
  * Inicializa el estado de autenticación al cargar la página
  */
 async function initAuthSystem() {
     try {
+        // Verificar si hay usuario creado
+        const checkResponse = await fetch('/api/auth/check-user');
+        const checkData = await checkResponse.json();
+        userExists = checkData.userExists;
+        
         // Verificar si ya hay sesión activa en sessionStorage
         const storedToken = sessionStorage.getItem('auth_token');
         const storedUsername = sessionStorage.getItem('auth_username');
+        const storedLoginTime = sessionStorage.getItem('auth_login_time');
         
-        if (storedToken && storedUsername) {
-            authState.isLogged = true;
-            authState.username = storedUsername;
-            authState.token = storedToken;
-            updateAuthUI();
+        if (storedToken && storedUsername && storedLoginTime) {
+            // Verificar si la sesión ha caducado (24 horas = 86400000 ms)
+            const currentTime = Date.now();
+            const sessionDuration = currentTime - parseInt(storedLoginTime);
+            const SESSION_TIMEOUT = 24 * 60 * 60 * 1000; // 24 horas en milisegundos
+            
+            if (sessionDuration < SESSION_TIMEOUT) {
+                // Sesión válida
+                authState.isLogged = true;
+                authState.username = storedUsername;
+                authState.token = storedToken;
+                authState.loginTime = parseInt(storedLoginTime);
+
+                // Pedir al servidor la info del usuario (email real)
+                try {
+                    const statusResp = await fetch('/api/auth/status', {
+                        headers: { 'Authorization': 'Bearer ' + storedToken }
+                    });
+                    const statusData = await statusResp.json();
+                    if (statusData.logged) {
+                        sessionStorage.setItem('auth_email', statusData.email || '');
+                        authState.username = statusData.username || authState.username;
+                    }
+                } catch (e) {
+                    console.warn('initAuthSystem: no se pudo obtener status del servidor', e);
+                }
+
+                updateAuthUI(userExists);
+            } else {
+                // Sesión caducada
+                sessionStorage.removeItem('auth_token');
+                sessionStorage.removeItem('auth_username');
+                sessionStorage.removeItem('auth_login_time');
+                updateAuthUI(userExists);
+            }
         } else {
-            // Verificar si hay usuario creado
-            const checkResponse = await fetch('/api/auth/check-user');
-            const checkData = await checkResponse.json();
-            updateAuthUI(checkData.userExists);
+            // Sin sesión activa
+            updateAuthUI(userExists);
         }
     } catch (error) {
         console.error('Error al inicializar autenticación:', error);
@@ -36,16 +74,25 @@ async function initAuthSystem() {
 /**
  * Actualiza la interfaz de usuario según el estado de autenticación
  */
-function updateAuthUI(userExists = null) {
+function updateAuthUI(userExistsParam = null) {
+    // Actualizar la variable global si se proporciona
+    if (userExistsParam !== null) {
+        userExists = userExistsParam;
+    }
+    
     const btnLogin = document.getElementById('btn-login');
     const btnCreateUser = document.getElementById('btn-create-user');
     const btnRecovery = document.getElementById('btn-recovery');
     const authLogged = document.getElementById('auth-logged');
     const loggedUsername = document.getElementById('logged-username');
     const configUsername = document.getElementById('config-username');
+    const configEmail = document.getElementById('config-email');
     const configLoginStatus = document.getElementById('config-login-status');
     
     if (authState.isLogged) {
+        // Usuario logueado: ocultar banner
+        updateAuthBanner(false);
+        
         // Usuario logueado
         if (btnLogin) btnLogin.classList.add('d-none');
         if (btnCreateUser) btnCreateUser.classList.add('d-none');
@@ -55,6 +102,11 @@ function updateAuthUI(userExists = null) {
         
         // Actualizar tarjeta de usuario
         if (configUsername) configUsername.textContent = authState.username;
+        // Obtener email del usuario desde la sesión (si está disponible)
+        const userEmail = sessionStorage.getItem('auth_email');
+        if (configEmail) {
+            configEmail.textContent = userEmail || '--';
+        }
         if (configLoginStatus) {
             configLoginStatus.textContent = 'Sesión activa';
             configLoginStatus.style.color = '#16a34a';
@@ -67,7 +119,9 @@ function updateAuthUI(userExists = null) {
         if (authLogged) authLogged.classList.remove('active');
         
         if (userExists) {
-            // Usuario existe pero no está logueado
+            // Usuario existe pero no está logueado: mostrar banner
+            updateAuthBanner(true, 'user-not-logged');
+            
             if (btnLogin) {
                 btnLogin.classList.remove('d-none');
             }
@@ -78,12 +132,15 @@ function updateAuthUI(userExists = null) {
             
             // Actualizar tarjeta de usuario
             if (configUsername) configUsername.textContent = 'Sin sesión iniciada';
+            if (configEmail) configEmail.textContent = '--';
             if (configLoginStatus) {
                 configLoginStatus.textContent = 'No logueado';
                 configLoginStatus.style.color = '#f59e0b';
             }
         } else {
-            // No existe usuario - mostrar crear
+            // No existe usuario - mostrar crear y banner
+            updateAuthBanner(true, 'no-user');
+            
             if (btnLogin) btnLogin.classList.add('d-none');
             if (btnCreateUser) {
                 btnCreateUser.classList.remove('d-none');
@@ -92,6 +149,7 @@ function updateAuthUI(userExists = null) {
             
             // Actualizar tarjeta de usuario
             if (configUsername) configUsername.textContent = 'No hay usuario creado';
+            if (configEmail) configEmail.textContent = '--';
             if (configLoginStatus) {
                 configLoginStatus.textContent = '--';
                 configLoginStatus.style.color = '#6b7280';
@@ -100,6 +158,9 @@ function updateAuthUI(userExists = null) {
         
         // Ocultar pestañas sensibles
         hideRestrictedTabs();
+        
+        // Cargar contenido dummy si no está logueado
+        loadDummyContent();
     }
     
     // REGLA POTENTE: Controlar visibilidad de secciones según estado de login
@@ -113,6 +174,35 @@ function updateAuthUI(userExists = null) {
 }
 
 /**
+ * Actualiza el banner de autenticación con mensajes dinámicos
+ */
+function updateAuthBanner(show = true, bannerType = 'user-not-logged') {
+    const banner = document.getElementById('auth-banner');
+    const bannerText = document.getElementById('auth-banner-text');
+    
+    if (!banner || !bannerText) return;
+    
+    if (!show) {
+        // Ocultar banner
+        banner.style.display = 'none';
+        return;
+    }
+    
+    // Mostrar banner con mensaje correspondiente
+    banner.style.display = 'flex';
+    
+    if (bannerType === 'no-user') {
+        bannerText.innerHTML = '<strong>⚙️ Configuración requerida:</strong> No hay usuario creado. Para acceder a todas las funciones de GridBot Pro, necesitas crear una cuenta. Haz clic en el botón <strong>"Crear Usuario"</strong> para comenzar.';
+    } else if (bannerType === 'user-not-logged') {
+        bannerText.innerHTML = '<strong>🔐 Acceso limitado:</strong> Tu sesión ha expirado o no estás autenticado. Por favor, inicia sesión para disfrutar de todas las funciones de GridBot Pro.';
+    }
+}
+
+/**
+ * Oculta/muestra valores sensibles en el dashboard
+ * Usa un intervalo para mantener los valores ocultos continuamente
+ */
+/**
  * REGLA POTENTE Y MODULAR: Controla automáticamente la visibilidad de elementos
  * basándose en el estado de login del usuario
  * 
@@ -122,17 +212,69 @@ function updateAuthUI(userExists = null) {
 function updateConfigSectionsVisibility() {
     // Obtener todos los elementos que requieren autenticación
     const authRequiredElements = document.querySelectorAll('[data-auth-required="true"]');
+    const dummyCardsRow = document.getElementById('dummy-cards-row');
+    const dummyChartsRow = document.getElementById('dummy-charts-row');
+
+    // Debug: mostrar estado y conteos
+    try {
+        console.debug('updateConfigSectionsVisibility - isLogged:', authState.isLogged, 'authRequiredCount:', authRequiredElements.length, 'dummyCardsRow:', !!dummyCardsRow, 'dummyChartsRow:', !!dummyChartsRow);
+    } catch (e) {
+        // no-op
+    }
     
     if (authState.isLogged) {
-        // Usuario logueado: mostrar elementos sensibles
+        // Usuario logueado: mostrar elementos sensibles, ocultar dummy
         authRequiredElements.forEach(element => {
             element.classList.remove('d-none');
         });
+        if (dummyCardsRow) {
+            dummyCardsRow.classList.add('d-none');
+        }
+        if (dummyChartsRow) {
+            dummyChartsRow.classList.add('d-none');
+        }
     } else {
-        // Usuario NO logueado: ocultar elementos sensibles
+        // Usuario NO logueado: ocultar elementos sensibles, mostrar dummy
         authRequiredElements.forEach(element => {
             element.classList.add('d-none');
         });
+        if (dummyCardsRow) {
+            dummyCardsRow.classList.remove('d-none');
+        }
+        if (dummyChartsRow) {
+            dummyChartsRow.classList.remove('d-none');
+        }
+    }
+
+    // Validación post-acción: comprobar discrepancias visibles y reportarlas
+    try {
+        if (authState.isLogged) {
+            authRequiredElements.forEach(el => {
+                if (el.classList.contains('d-none')) {
+                    console.warn('Visibility mismatch: element with data-auth-required still hidden while logged in', el);
+                }
+            });
+            if (dummyCardsRow && !dummyCardsRow.classList.contains('d-none')) {
+                console.warn('Visibility mismatch: dummy-cards-row should be hidden when logged in');
+            }
+            if (dummyChartsRow && !dummyChartsRow.classList.contains('d-none')) {
+                console.warn('Visibility mismatch: dummy-charts-row should be hidden when logged in');
+            }
+        } else {
+            authRequiredElements.forEach(el => {
+                if (!el.classList.contains('d-none')) {
+                    console.warn('Visibility mismatch: element with data-auth-required visible while NOT logged in', el);
+                }
+            });
+            if (dummyCardsRow && dummyCardsRow.classList.contains('d-none')) {
+                console.warn('Visibility mismatch: dummy-cards-row should be visible when NOT logged in');
+            }
+            if (dummyChartsRow && dummyChartsRow.classList.contains('d-none')) {
+                console.warn('Visibility mismatch: dummy-charts-row should be visible when NOT logged in');
+            }
+        }
+    } catch (err) {
+        console.warn('Error during visibility validation', err);
     }
 }
 
@@ -196,11 +338,31 @@ async function performLogin() {
             authState.isLogged = true;
             authState.username = username;
             authState.token = data.token;
+            authState.loginTime = Date.now();
             
-            // Guardar en sessionStorage
+            // Guardar en sessionStorage incluyendo timestamp y email
             sessionStorage.setItem('auth_token', data.token);
             sessionStorage.setItem('auth_username', username);
+            sessionStorage.setItem('auth_login_time', authState.loginTime.toString());
+            // Temporalmente guardar email vacío; lo obtendremos del servidor
+            sessionStorage.setItem('auth_email', '');
             
+            // Debug: confirmar estado antes de actualizar UI
+            console.debug('performLogin: authState set ->', JSON.parse(JSON.stringify(authState)));
+            
+            // Obtener email desde servidor de sesión
+            try {
+                const statusResp = await fetch('/api/auth/status', {
+                    headers: { 'Authorization': 'Bearer ' + data.token }
+                });
+                const statusData = await statusResp.json();
+                if (statusData.logged && statusData.email) {
+                    sessionStorage.setItem('auth_email', statusData.email);
+                }
+            } catch (e) {
+                console.warn('performLogin: no se pudo obtener email del servidor', e);
+            }
+
             updateAuthUI();
             
             // Cerrar modal
@@ -292,10 +454,16 @@ async function performCreateUser() {
             authState.isLogged = true;
             authState.username = username;
             authState.token = data.token;
+            authState.loginTime = Date.now();
             
-            // Guardar en sessionStorage
+            // Guardar en sessionStorage incluyendo timestamp y email
             sessionStorage.setItem('auth_token', data.token);
             sessionStorage.setItem('auth_username', username);
+            sessionStorage.setItem('auth_login_time', authState.loginTime.toString());
+            sessionStorage.setItem('auth_email', email); // Guardar email del usuario creado
+            
+            // Debug: confirmar estado antes de actualizar UI
+            console.debug('performCreateUser: authState set ->', JSON.parse(JSON.stringify(authState)));
             
             updateAuthUI();
             
@@ -416,10 +584,22 @@ async function logout() {
                 authState.isLogged = false;
                 authState.username = null;
                 authState.token = null;
+                authState.loginTime = null;
                 
                 // Limpiar sessionStorage
                 sessionStorage.removeItem('auth_token');
                 sessionStorage.removeItem('auth_username');
+                sessionStorage.removeItem('auth_login_time');
+                
+                // Debug
+                console.debug('logout - authState set to false');
+                
+                // Forzar refresco del visibility toggle
+                try {
+                    updateConfigSectionsVisibility();
+                } catch (e) {
+                    console.warn('logout: updateConfigSectionsVisibility failed', e);
+                }
                 
                 // Después de logout, el usuario sigue existiendo en BD
                 updateAuthUI(true);
@@ -440,18 +620,28 @@ async function logout() {
  * Muestra todas las pestañas (usuario logueado)
  */
 function showAllTabs() {
-    document.getElementById('tab-operaciones').parentElement.classList.remove('d-none');
-    document.getElementById('tab-wallet').parentElement.classList.remove('d-none');
-    document.getElementById('tab-estrategias').parentElement.classList.remove('d-none');
+    ['tab-operaciones','tab-wallet','tab-estrategias'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el && el.parentElement) {
+            el.parentElement.classList.remove('d-none');
+        } else {
+            console.debug('showAllTabs: tab element missing', id);
+        }
+    });
 }
 
 /**
  * Oculta las pestañas restringidas (usuario no logueado)
  */
 function hideRestrictedTabs() {
-    document.getElementById('tab-operaciones').parentElement.classList.add('d-none');
-    document.getElementById('tab-wallet').parentElement.classList.add('d-none');
-    document.getElementById('tab-estrategias').parentElement.classList.add('d-none');
+    ['tab-operaciones','tab-wallet','tab-estrategias'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el && el.parentElement) {
+            el.parentElement.classList.add('d-none');
+        } else {
+            console.debug('hideRestrictedTabs: tab element missing', id);
+        }
+    });
 }
 
 // Actualizar ping cada 10 segundos
@@ -528,6 +718,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initAuthSystem();
     updateExchangeName();
     updatePing();
+    // Cargar contenido dummy en la carga inicial
+    setTimeout(() => loadDummyContent(), 500);
 });
 
 /**
@@ -584,3 +776,200 @@ function hideAllConfigSections() {
     hideConfigMoneda();
     hideZonaPeligro();
 }
+
+/**
+ * Filtra picos en los datos de balance
+ * Ignora variaciones >30% que duren <1 minuto
+ */
+function filterBalancePikes(history) {
+    if (history.length < 2) return history;
+    
+    const filtered = [history[0]];
+    const spike_threshold = 0.30; // 30%
+    const spike_duration_ms = 60000; // 1 minuto
+    
+    for (let i = 1; i < history.length; i++) {
+        const prev = filtered[filtered.length - 1];
+        const current = history[i];
+        
+        // Calcular variación porcentual
+        const change = Math.abs((current.balance - prev.balance) / prev.balance);
+        
+        if (change > spike_threshold) {
+            // Posible pico - buscar si se recupera rápido
+            let isPike = false;
+            for (let j = i + 1; j < history.length; j++) {
+                const next = history[j];
+                const timeDiff = new Date(next.timestamp) - new Date(current.timestamp);
+                const recoveryChange = Math.abs((next.balance - current.balance) / current.balance);
+                
+                // Si en menos de 1 minuto se recupera significativamente, es un pico
+                if (timeDiff < spike_duration_ms && recoveryChange > spike_threshold * 0.5) {
+                    isPike = true;
+                    break;
+                }
+                
+                if (timeDiff >= spike_duration_ms) break;
+            }
+            
+            // Si es pico, saltarlo; si no, incluirlo
+            if (!isPike) {
+                filtered.push(current);
+            }
+        } else {
+            filtered.push(current);
+        }
+    }
+    
+    return filtered;
+}
+
+/**
+ * Carga el gráfico dummy (para usuarios no logueados)
+ * Crea un gráfico ficticio sin valores sensibles
+ */
+async function loadDummyBalanceChart() {
+    try {
+        const dummyChartEl = document.getElementById('dummyBalanceChartHistory');
+        if (!dummyChartEl) return;
+        
+        // Asegurar que el elemento está visible y tiene dimensiones
+        if (dummyChartEl.offsetParent === null) {
+            console.warn('dummyBalanceChartHistory: elemento no visible');
+            return;
+        }
+        
+        const dummyChart = echarts.init(dummyChartEl, 'light', { renderer: 'canvas' });
+        
+        // Crear datos ficticios para el gráfico demo
+        const demoTimestamps = [];
+        const demoBalances = [];
+        const baseValue = 100;
+        
+        // Generar 50 puntos de datos ficticios
+        for (let i = 0; i < 50; i++) {
+            const hour = Math.floor(i / 2);
+            const minute = (i % 2) * 30;
+            demoTimestamps.push(`${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`);
+            
+            // Generar variación aleatoria pero suave
+            const randomChange = (Math.random() - 0.5) * 15;
+            const balance = baseValue + randomChange + Math.sin(i / 10) * 20;
+            demoBalances.push(Math.max(60, Math.min(140, balance)).toFixed(2));
+        }
+        
+        const option = {
+            tooltip: { trigger: 'axis', show: false },
+            xAxis: {
+                type: 'category',
+                data: demoTimestamps,
+                boundaryGap: false,
+                axisLine: { lineStyle: { color: '#ddd' } },
+                axisLabel: { show: true, fontSize: 10, interval: 8 }
+            },
+            yAxis: {
+                type: 'value',
+                axisLine: { lineStyle: { color: '#ddd' } },
+                axisLabel: { show: false },
+                splitLine: { lineStyle: { color: 'rgba(0,0,0,0.05)' } }
+            },
+            grid: { left: '8%', right: '5%', top: '5%', bottom: '5%', containLabel: false },
+            series: [{
+                data: demoBalances,
+                type: 'line',
+                smooth: true,
+                lineStyle: { color: 'rgba(255, 121, 7, 0.6)', width: 2.5 },
+                itemStyle: { color: 'rgba(255, 121, 7, 0.4)' },
+                areaStyle: { color: 'rgba(255, 121, 7, 0.12)' },
+                symbolSize: 0,
+                symbol: 'none'
+            }],
+            animation: true
+        };
+        
+        dummyChart.setOption(option);
+        window.addEventListener('resize', () => dummyChart.resize());
+    } catch (e) {
+        console.warn('Error loading dummy balance chart:', e);
+    }
+}
+
+/**
+ * Carga la tabla de operaciones dummy (para usuarios no logueados)
+ * Muestra operaciones pero sin valores sensibles (PnL, Capital)
+ */
+async function loadDummyTopStrategies() {
+    try {
+        const res = await fetch('/api/top_strategies');
+        const data = await res.json();
+        const container = document.getElementById('dummyTopStrategiesContainer');
+        
+        if (!container) return;
+        
+        if (!data.strategies || data.strategies.length === 0) {
+            container.innerHTML = '<p class="text-muted text-center small py-5">Sin operaciones registradas aún</p>';
+            return;
+        }
+        
+        container.innerHTML = data.strategies.map((s, idx) => {
+            const roiClass = s.roi_annualized >= 0 ? 'text-success' : 'text-danger';
+            const pnlSign = s.pnl >= 0 ? '+' : '';
+            
+            return `
+                <div class="strategy-item">
+                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                        <div style="display: flex; align-items: center;">
+                            <div class="strategy-rank">${idx + 1}</div>
+                            <div>
+                                <div class="strategy-symbol">${s.symbol}</div>
+                                <div class="strategy-roi ${roiClass}">ROI: ${s.roi_annualized.toFixed(1)}% anual</div>
+                            </div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div class="text-muted small" style="letter-spacing: 2px; font-weight: 600;">${pnlSign}$••••••</div>
+                        </div>
+                    </div>
+                    <div class="strategy-metrics">
+                        <div class="strategy-metric">
+                            <span class="strategy-metric-label">Capital:</span>
+                            <span class="strategy-metric-value text-muted" style="letter-spacing: 1px;">$•••••</span>
+                        </div>
+                        <div class="strategy-metric">
+                            <span class="strategy-metric-label">ROI:</span>
+                            <span class="strategy-metric-value">${s.roi_percent.toFixed(1)}%</span>
+                        </div>
+                        <div class="strategy-metric">
+                            <span class="strategy-metric-label">Trades:</span>
+                            <span class="strategy-metric-value">${s.trades}</span>
+                        </div>
+                        <div class="strategy-metric">
+                            <span class="strategy-metric-label">Días:</span>
+                            <span class="strategy-metric-value">${s.days_active.toFixed(0)}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    } catch (e) {
+        console.error("Error loading dummy top strategies:", e);
+    }
+}
+
+/**
+ * Carga dummies cuando el usuario no está logueado
+ */
+function loadDummyContent() {
+    if (!authState.isLogged) {
+        loadDummyBalanceChart();
+        loadDummyTopStrategies();
+    }
+}
+
+// Helper temporal para pruebas: permite forzar el estado de autenticación desde la consola
+window.__debugToggleAuth = function(forceLogged) {
+    console.debug('__debugToggleAuth called with', forceLogged);
+    authState.isLogged = !!forceLogged;
+    // Forzar visibilidad inmediatamente
+    updateConfigSectionsVisibility();
+    updateAuthUI();
+};

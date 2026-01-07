@@ -1,5 +1,5 @@
 # Archivo: gridbot_binance/web/server.py
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, Header
 from fastapi.staticfiles import StaticFiles 
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
@@ -1030,7 +1030,7 @@ def check_user_exists():
     return {"userExists": user_exists()}
 
 @app.get("/api/auth/status", name="auth_status")
-def auth_status(authorization: str = None):
+def auth_status(authorization: str = Header(None)):
     """Obtiene el estado actual de autenticación"""
     # Intentar obtener token del header Authorization
     token = None
@@ -1040,9 +1040,18 @@ def auth_status(authorization: str = None):
     if token:
         session = verify_session(token)
         if session["success"]:
+            # Obtener email desde la DB
+            try:
+                from utils.auth import get_user_by_id
+                user_info = get_user_by_id(session.get("user_id"))
+                email = user_info.get("email") if user_info.get("success") else None
+            except Exception:
+                email = None
+
             return {
                 "logged": True,
                 "username": session["username"],
+                "email": email,
                 "token": token
             }
     

@@ -93,11 +93,6 @@ body {
     white-space: nowrap;
 }
 
-.navbar-brand-styled:hover {
-    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
-    transform: translateY(-2px);
-}
-
 .navbar-brand-styled span {
     background: linear-gradient(135deg, #ffffff, #e0e7ff);
     -webkit-background-clip: text;
@@ -156,6 +151,68 @@ body {
     border-radius: 0.6rem;
     box-shadow: 0 6px 16px rgba(224, 75, 90, 0.14);
     font-weight: 700;
+}
+
+/* ========== BANNER DE AUTENTICACIÓN ========== */
+.auth-banner {
+    background: linear-gradient(135deg, rgba(255, 121, 7, 0.12) 0%, rgba(255, 140, 30, 0.08) 100%);
+    border-bottom: 2px solid rgba(255, 121, 7, 0.3);
+    padding: 14px 20px;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.auth-banner-content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    color: #d97706;
+    font-size: 0.95rem;
+    font-weight: 500;
+    max-width: 800px;
+    text-align: center;
+}
+
+.auth-banner i {
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+
+/* ========== VALORES SENSIBLES (Ocultos sin login) ========== */
+.sensitive-value {
+    transition: all 0.3s ease;
+}
+
+/* Cuando el valor está oculto (sin login) */
+[data-auth-required="true"] .sensitive-value:not([data-visible="true"]),
+.sensitive-value:not([data-visible="true"]) {
+    font-family: 'Courier New', monospace;
+    letter-spacing: 2px;
+    font-weight: 600;
+}
+
+/* Gráfico del balance histórico sin valores de eje Y */
+.chart-container.hide-y-axis-values svg text[text-anchor="end"],
+.chart-container.hide-y-axis-values svg text[text-anchor="start"] {
+    font-size: 0 !important;
+}
+
+/* Ocultar valores en tabla de Top Operaciones */
+.top-strategies-list.hide-strategy-values .roi-value,
+.top-strategies-list.hide-strategy-values .capital-value,
+.top-strategies-list.hide-strategy-values .pnl-value {
+    visibility: hidden;
+}
+
+.top-strategies-list.hide-strategy-values .roi-value::before,
+.top-strategies-list.hide-strategy-values .capital-value::before,
+.top-strategies-list.hide-strategy-values .pnl-value::before {
+    content: '••••••';
+    visibility: visible;
+    color: #999;
 }
 
 /* ========== CONTENEDOR PRINCIPAL ========== */
@@ -802,7 +859,6 @@ footer {
 .modal-footer .btn-primary:hover {
     transform: translateY(-2px);
     box-shadow: 0 6px 20px rgba(91, 69, 244, 0.4) !important;
-}
     background: var(--accent-strong) !important;
     border-color: var(--accent-strong) !important;
 }
@@ -826,6 +882,23 @@ footer {
 .modal-footer .btn-outline-secondary:hover {
     background: #f8f9fa !important;
     border-color: #adb5bd !important;
+}
+
+/* Botón de Cerrar Sesión - Color Rojo */
+#btn-logout {
+    background-color: #dc2626 !important;
+    border-color: #dc2626 !important;
+    color: #ffffff !important;
+    font-weight: 600 !important;
+    transition: all 0.3s ease !important;
+}
+
+#btn-logout:hover {
+    background-color: #b91c1c !important;
+    border-color: #991b1b !important;
+    color: #ffffff !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4) !important;
 }
 
 /* Variante especial para modal de donación */

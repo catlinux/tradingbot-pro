@@ -71,20 +71,23 @@
                             Dashboard
                         </button>
                     </li>
-
-                    <!-- Operaciones (oculta) -->
+                    <!-- Operaciones (oculta hasta terminar login) -->
+                    <!-- <li class="nav-item" data-auth-required="true"> -->
                     <li class="nav-item d-none">
-                        <button class="nav-link navbar-tab" id="tab-operaciones" data-bs-toggle="tab" data-bs-target="#content-home" type="button" onclick="setMode('home')">
+                        <!-- <button class="nav-link navbar-tab" id="tab-operaciones" data-bs-toggle="tab" data-bs-target="#content-home" type="button" onclick="setMode('home')"> -->
+                        <button class="nav-link navbar-tab" data-bs-toggle="tab" data-bs-target="#content-home" type="button" onclick="setMode('home')">
                             Operaciones
                         </button>
                     </li>
 
-                    <li class="nav-item d-none"> data-bs-toggle="tab" data-bs-target="#content-wallet" type="button" onclick="setMode('wallet')">
+                    <li class="nav-item d-none">
+                        <button class="nav-link navbar-tab" data-bs-toggle="tab" data-bs-target="#content-wallet" type="button" onclick="setMode('wallet')">
                             Backtest
                         </button>
                     </li>
 
-                    <li class="nav-item d-none"> data-bs-toggle="tab" data-bs-target="#content-wallet" type="button" onclick="setMode('wallet')">
+                    <li class="nav-item d-none">
+                        <button class="nav-link navbar-tab" data-bs-toggle="tab" data-bs-target="#content-wallet" type="button" onclick="setMode('wallet')">
                             Estrategias
                         </button>
                     </li>
@@ -95,14 +98,17 @@
                         </button>
                     </li>
                 </ul>
-                
-                <!-- Sección Derecha: Botón Salir -->
-                <div class="ms-auto d-flex align-items-center gap-3">
-                    <button class="btn btn-danger btn-sm fw-bold">Salir</button>
-                </div>
             </div>
         </div>
     </nav>
+
+    <!-- Banner de Autenticación (dinámico según estado) -->
+    <div id="auth-banner" class="auth-banner" style="display: none;">
+        <div class="auth-banner-content">
+            <i class="fa-solid fa-circle-info me-2"></i>
+            <span id="auth-banner-text"></span>
+        </div>
+    </div>
 
     <div class="container-fluid px-4 main-content">
 
@@ -111,50 +117,97 @@
             <!-- NUEVA PESTAÑA: DASHBOARD (Entrada principal) -->
             <div class="tab-pane fade show active" id="content-dashboard" role="tabpanel">
                 <div class="section-title"><i class="fa-solid fa-chart-pie me-1"></i> Dashboard</div>
+                
+                <!-- TARJETAS REALES (Visibles solo cuando está logueado) -->
                 <div class="row mb-4">
-                    <div class="col-md-2">
+                    <!-- Estado (visible solo cuando está logueado) -->
+                    <div class="col-md-2" data-auth-required="true">
                         <div class="card dashboard-card p-3 h-100">
                             <small class="dashboard-label">Estado</small>
                             <div id="summary-status" class="dashboard-value">-- <span id="summary-uptime" class="dashboard-sub">Uptime: --</span></div>
                         </div>
                     </div>
+                    <!-- Resto de tarjetas (ocultas sin login) -->
+                        <div class="col-md-2" data-auth-required="true">
+                            <div class="card dashboard-card p-3 h-100">
+                                <small class="dashboard-label">Balance total</small>
+                                <div id="summary-balance" class="dashboard-value">-- US$</div>
+                            </div>
+                        </div>
+                        <div class="col-md-2" data-auth-required="true">
+                            <div class="card dashboard-card p-3 h-100">
+                                <small class="dashboard-label">PnL sesión</small>
+                                <div id="summary-pnl-session" class="dashboard-value dashboard-value-success">$0.00</div>
+                            </div>
+                        </div>
+                        <div class="col-md-2" data-auth-required="true">
+                            <div class="card dashboard-card p-3 h-100">
+                                <small class="dashboard-label">PnL grid</small>
+                                <div id="summary-pnl-grid" class="dashboard-value">$0.00</div>
+                            </div>
+                        </div>
+                        <div class="col-md-2" data-auth-required="true">
+                            <div class="card dashboard-card p-3 h-100">
+                                <small class="dashboard-label">Operaciones totales</small>
+                                <div id="summary-total-operations" class="dashboard-value">0</div>
+                            </div>
+                        </div>
+                        <div class="col-md-2" data-auth-required="true">
+                            <div class="card dashboard-card p-3 h-100">
+                                <small class="dashboard-label">Balances</small>
+                                <div id="summary-balances" class="dashboard-value">
+                                    <div class="balance-row"><span class="bal-label">Disponible:</span> <span class="bal-value" id="bal-available">-- US$</span></div>
+                                    <div class="balance-row"><span class="bal-label">Órdenes:</span> <span class="bal-value" id="bal-orders">-- US$</span></div>
+                                </div>
+                            </div>
+                        </div>
+                </div>
+
+                <!-- TARJETAS DUMMY (Visibles solo cuando NO está logueado) -->
+                <div class="row mb-4 d-none" id="dummy-cards-row">
+                    <div class="col-md-2">
+                        <div class="card dashboard-card p-3 h-100">
+                            <small class="dashboard-label">Estado</small>
+                            <div class="dashboard-value text-muted small">••••••</div>
+                        </div>
+                    </div>
                     <div class="col-md-2">
                         <div class="card dashboard-card p-3 h-100">
                             <small class="dashboard-label">Balance total</small>
-                            <div id="summary-balance" class="dashboard-value">-- US$</div>
+                            <div class="dashboard-value text-muted small">••••••••</div>
                         </div>
                     </div>
                     <div class="col-md-2">
                         <div class="card dashboard-card p-3 h-100">
                             <small class="dashboard-label">PnL sesión</small>
-                            <div id="summary-pnl-session" class="dashboard-value dashboard-value-success">$0.00</div>
+                            <div class="dashboard-value text-muted small">••••••••</div>
                         </div>
                     </div>
                     <div class="col-md-2">
                         <div class="card dashboard-card p-3 h-100">
                             <small class="dashboard-label">PnL grid</small>
-                            <div id="summary-pnl-grid" class="dashboard-value">$0.00</div>
+                            <div class="dashboard-value text-muted small">••••••••</div>
                         </div>
                     </div>
                     <div class="col-md-2">
                         <div class="card dashboard-card p-3 h-100">
                             <small class="dashboard-label">Operaciones totales</small>
-                            <div id="summary-total-operations" class="dashboard-value">0</div>
+                            <div class="dashboard-value">-</div>
                         </div>
                     </div>
                     <div class="col-md-2">
                         <div class="card dashboard-card p-3 h-100">
                             <small class="dashboard-label">Balances</small>
-                            <div id="summary-balances" class="dashboard-value">
-                                <div class="balance-row"><span class="bal-label">Disponible:</span> <span class="bal-value" id="bal-available">-- US$</span></div>
-                                <div class="balance-row"><span class="bal-label">Órdenes:</span> <span class="bal-value" id="bal-orders">-- US$</span></div>
+                            <div class="dashboard-value small">
+                                <div class="balance-row"><span class="bal-label">Disponible:</span> <span class="bal-value text-muted">•••••</span></div>
+                                <div class="balance-row"><span class="bal-label">Órdenes:</span> <span class="bal-value text-muted">•••••</span></div>
                             </div>
                         </div>
                     </div>
                 </div>
 
                 <!-- Dos cuadros grandes para contenido adicional -->
-                <div class="row mb-4 config-row-margin">
+                <div class="row mb-4 config-row-margin" data-auth-required="true">
                     <div class="col-md-6">
                         <div class="card dashboard-card p-4 chart-card">
                             <div class="d-flex flex-column h-100">
@@ -179,7 +232,45 @@
                                 </div>
 
                                 <div class="flex-grow-1 d-flex align-items-center justify-content-center">
-                                    <div id="balanceChartHistory" class="chart-container chart-container-custom"></div>
+                                    <div id="balanceChartHistory" class="chart-container chart-container-custom hide-y-axis-values"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card dashboard-card p-4 chart-card" data-auth-required="true">
+                            <div class="d-flex flex-column h-100">
+                                <h6 class="fw-bold mb-3">Top Operaciones Grid Trading</h6>
+                                <div class="flex-grow-1 d-flex flex-column overflow-y-auto">
+                                    <div id="top-strategies-container" class="top-strategies-list hide-strategy-values">
+                                        <p class="text-muted text-center small py-5">Cargando operaciones...</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TARJETAS DUMMY GRÁFICO Y TABLA (Visibles solo cuando NO está logueado) -->
+                <div class="row mb-4 config-row-margin d-none" id="dummy-charts-row">
+                    <div class="col-md-6">
+                        <div class="card dashboard-card p-4 chart-card">
+                            <div class="d-flex flex-column h-100">
+                                <div class="d-flex align-items-center justify-content-between mb-2">
+                                    <h6 class="fw-bold mb-0">Balance total (histórico)</h6>
+                                    <div class="d-flex align-items-center gap-3">
+                                        <div class="d-flex align-items-center gap-2">
+                                            <select class="form-select form-select-sm chart-filter-select select-auto-width" disabled>
+                                                <option value="24" selected>1 día</option>
+                                            </select>
+                                            <select class="form-select form-select-sm chart-filter-select select-auto-width-lg" disabled>
+                                                <option value="binance" selected>Binance</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="flex-grow-1 d-flex align-items-center justify-content-center">
+                                    <div id="dummyBalanceChartHistory" class="chart-container chart-container-custom" style="opacity: 0.6;"></div>
                                 </div>
                             </div>
                         </div>
@@ -189,8 +280,8 @@
                             <div class="d-flex flex-column h-100">
                                 <h6 class="fw-bold mb-3">Top Operaciones Grid Trading</h6>
                                 <div class="flex-grow-1 d-flex flex-column overflow-y-auto">
-                                    <div id="top-strategies-container" class="top-strategies-list">
-                                        <p class="text-muted text-center small py-5">Cargando operaciones...</p>
+                                    <div id="dummyTopStrategiesContainer" class="top-strategies-list">
+                                        <p class="text-muted text-center small py-5">Inicia sesión para ver todas las operaciones y datos financieros</p>
                                     </div>
                                 </div>
                             </div>
@@ -376,6 +467,7 @@
                         <div class="card dashboard-card p-3 h-100">
                             <small class="dashboard-label">Usuario</small>
                             <div class="dashboard-value config-username" id="config-username">--</div>
+                            <div id="config-email" style="font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 12px; color: #6b7280; margin-top: 6px; word-break: break-word;">--</div>
                         </div>
                     </div>
                     <div class="col-md-3">
@@ -541,7 +633,7 @@
                         </div>
                         <div class="mb-3">
                             <label for="login-password" class="form-label">Contraseña</label>
-                            <input type="password" class="form-control" id="login-password" required>
+                            <input type="password" class="form-control" id="login-password" required autocomplete="current-password">
                         </div>
                         <div id="login-error" class="alert alert-danger d-none"></div>
                     </form>
@@ -600,13 +692,13 @@
                         
                         <div class="mb-3">
                             <label for="create-password" class="form-label">Contraseña</label>
-                            <input type="password" class="form-control" id="create-password" required>
+                            <input type="password" class="form-control" id="create-password" required autocomplete="new-password">
                             <small class="form-text text-muted">Min. 8 caracteres con mayúscula, número y símbolo</small>
                         </div>
                         
                         <div class="mb-3">
                             <label for="create-password-confirm" class="form-label">Confirmar Contraseña</label>
-                            <input type="password" class="form-control" id="create-password-confirm" required>
+                            <input type="password" class="form-control" id="create-password-confirm" required autocomplete="new-password">
                         </div>
                         
                         <div id="create-error" class="alert alert-danger d-none"></div>

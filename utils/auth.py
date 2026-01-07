@@ -215,6 +215,21 @@ def verify_session(token: str) -> dict:
     except Exception:
         return {"success": False}
 
+
+def get_user_by_id(user_id: int) -> dict:
+    """Obtiene información básica del usuario (username, email) por user_id"""
+    try:
+        conn = sqlite3.connect(AUTH_DB)
+        cursor = conn.cursor()
+        cursor.execute('SELECT username, email FROM users WHERE id = ?', (user_id,))
+        row = cursor.fetchone()
+        conn.close()
+        if row:
+            return {"success": True, "username": row[0], "email": row[1]}
+        return {"success": False}
+    except Exception as e:
+        log.error(f"Error obteniendo usuario por id {user_id}: {e}")
+        return {"success": False}
 def get_security_question(username: str) -> dict:
     """Obtiene la pregunta de seguridad de un usuario"""
     questions = {

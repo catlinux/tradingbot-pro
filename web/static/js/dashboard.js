@@ -53,6 +53,65 @@ window.openCapitalAdjustment = openCapitalAdjustment;
 window.recordBalanceSnapshot = recordBalanceSnapshot;
 window.loadTopStrategies = loadTopStrategies;
 
+/**
+ * Filtra picos en los datos de balance
+ * Ignora variaciones >30% que duren <1 minuto
+ */
+function filterBalancePikes(history) {
+    if (!Array.isArray(history) || history.length < 2) return history;
+    
+    // Detectar formato: array de [timestamp, balance] o array de objetos
+    const isArrayFormat = Array.isArray(history[0]);
+    
+    const filtered = [history[0]];
+    const spike_threshold = 0.30; // 30%
+    const spike_duration_ms = 60000; // 1 minuto
+    
+    for (let i = 1; i < history.length; i++) {
+        const prev = filtered[filtered.length - 1];
+        const current = history[i];
+        
+        // Extraer valor de balance según formato
+        const prevBalance = isArrayFormat ? prev[1] : prev.balance;
+        const currBalance = isArrayFormat ? current[1] : current.balance;
+        const prevTimestamp = isArrayFormat ? prev[0] : prev.timestamp;
+        const currTimestamp = isArrayFormat ? current[0] : current.timestamp;
+        
+        // Calcular variación porcentual
+        const change = Math.abs((currBalance - prevBalance) / Math.max(prevBalance, 0.01));
+        
+        if (change > spike_threshold) {
+            // Posible pico - buscar si se recupera rápido
+            let isPike = false;
+            for (let j = i + 1; j < history.length; j++) {
+                const next = history[j];
+                const nextBalance = isArrayFormat ? next[1] : next.balance;
+                const nextTimestamp = isArrayFormat ? next[0] : next.timestamp;
+                
+                const timeDiff = nextTimestamp - currTimestamp;
+                const recoveryChange = Math.abs((nextBalance - currBalance) / Math.max(currBalance, 0.01));
+                
+                // Si en menos de 1 minuto se recupera significativamente, es un pico
+                if (timeDiff < spike_duration_ms && recoveryChange > spike_threshold * 0.5) {
+                    isPike = true;
+                    break;
+                }
+                
+                if (timeDiff >= spike_duration_ms) break;
+            }
+            
+            // Si es pico, saltarlo; si no, incluirlo
+            if (!isPike) {
+                filtered.push(current);
+            }
+        } else {
+            filtered.push(current);
+        }
+    }
+    
+    return filtered;
+}
+
 // --- FUNCIÓN PRINCIPAL DE INICIALIZACIÓN ---
 /**
  * Inicializa el panel al cargar la página
@@ -700,7 +759,8 @@ async function loadBalanceCharts() {
         }
         const data = await res.json(); 
         
-        fullGlobalHistory = data.global; 
+        // Aplicar filtro de pikes: ignorar variaciones >30% en <1 minuto
+        fullGlobalHistory = filterBalancePikes(data.global); 
         
         // Solo renderizar con ECharts (mucho mejor control de escala)
         renderEChart('balanceChartSession', data.session, '#0ecb81', 'Balance Sesión');
