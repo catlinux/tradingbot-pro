@@ -1,0 +1,10 @@
+ccxt
+json5
+python-dotenv
+colorama
+fastapi
+uvicorn[standard]
+pandas
+jinja2
+requests
+watchdog>=2.1.0

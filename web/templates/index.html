@@ -1,0 +1,618 @@
+<!-- Archivo: web/templates/index.html -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GridBot Pro</title>
+    
+    <!-- Favicon: Un robot en SVG incrustado -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🤖</text></svg>">
+
+    <!-- Librerías de Estilo (Bootstrap + FontAwesome) -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Fuente precisa para UI -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Estilos Propios -->
+    <link rel="stylesheet" href="/static/css/style.css">
+    <!-- El ID permite cambiar el tema dinámicamente desde JS (unificado) -->
+    <link id="theme-stylesheet" rel="stylesheet" href="/static/css/style.css">
+    
+    <!-- Librerías de JavaScript (Gráficos, Alertas, JSON5) -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    
+    <script src="https://unpkg.com/json5@2/dist/index.min.js"></script>
+    
+    <style>
+        body { display: flex; flex-direction: column; min-height: 100vh; padding-bottom: 0; }
+        .main-content { flex: 1; }
+        .chart-pie { height: 320px; width: 100%; }
+        
+        .social-link { 
+            color: rgba(255,255,255,0.6); 
+            transition: all 0.3s; 
+            font-size: 1.5rem;
+        }
+        .social-link:hover { color: #fff; transform: translateY(-3px); }
+        
+        .disclaimer-box {
+            background-color: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            padding: 15px;
+            font-size: 0.85rem;
+            color: #aaa;
+            margin-top: 20px;
+            text-align: justify;
+        }
+        
+        .crypto-addr { font-family: monospace; background: #f8f9fa; padding: 5px; border-radius: 4px; border: 1px solid #dee2e6; word-break: break-all;}
+    </style>
+</head>
+<body>
+
+    <nav class="navbar navbar-dark mb-0 navbar-gridbot">
+        <div class="container-fluid px-4">
+            <div class="d-flex align-items-center w-100">
+                <!-- Logo y Título -->
+                <a class="navbar-brand d-flex align-items-center navbar-brand-styled" href="#">
+                    <span class="fw-bold fs-5">GridBot Pro</span>
+                </a>
+                
+                <!-- Menú de Navegación Horizontal -->
+                <ul class="nav nav-tabs navbar-nav ms-4 flex-row" id="mainTabs" role="tablist">
+                    <!-- Nueva pestaña principal: Dashboard (entrada) -->
+                    <li class="nav-item">
+                        <button class="nav-link active navbar-tab" id="tab-dashboard" data-bs-toggle="tab" data-bs-target="#content-dashboard" type="button">
+                            Dashboard
+                        </button>
+                    </li>
+
+                    <!-- Operaciones (oculta) -->
+                    <li class="nav-item" style="display: none;">
+                        <button class="nav-link navbar-tab" id="tab-operaciones" data-bs-toggle="tab" data-bs-target="#content-home" type="button" onclick="setMode('home')">
+                            Operaciones
+                        </button>
+                    </li>
+
+                    <li class="nav-item" style="display: none;">
+                        <button class="nav-link navbar-tab" id="tab-wallet" data-bs-toggle="tab" data-bs-target="#content-wallet" type="button" onclick="setMode('wallet')">
+                            Backtest
+                        </button>
+                    </li>
+
+                    <li class="nav-item" style="display: none;">
+                        <button class="nav-link navbar-tab" id="tab-estrategias" data-bs-toggle="tab" data-bs-target="#content-wallet" type="button" onclick="setMode('wallet')">
+                            Estrategias
+                        </button>
+                    </li>
+
+                    <li class="nav-item" style="display: none;">
+                        <button class="nav-link navbar-tab" id="tab-config" data-bs-toggle="tab" data-bs-target="#content-config" type="button" onclick="loadConfigForm()">
+                            Configuración
+                        </button>
+                    </li>
+                </ul>
+                
+                <!-- Sección Derecha: Usuario, Email y Botón Salir -->
+                <div class="ms-auto d-flex align-items-center gap-3">
+                    <span class="text-white small" id="user-email">admin.gridbot@gmail.com</span>
+                    <button class="btn btn-danger btn-sm fw-bold">Salir</button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid px-4 main-content">
+
+        <div class="tab-content" id="mainTabsContent">
+
+            <!-- NUEVA PESTAÑA: DASHBOARD (Entrada principal) -->
+            <div class="tab-pane fade show active" id="content-dashboard" role="tabpanel">
+                <div class="section-title"><i class="fa-solid fa-chart-pie me-1"></i> Dashboard</div>
+                <div class="row mb-4">
+                    <div class="col-md-2">
+                        <div class="card dashboard-card p-3 h-100">
+                            <small class="dashboard-label">Estado</small>
+                            <div id="summary-status" class="dashboard-value">-- <span id="summary-uptime" class="dashboard-sub">Uptime: --</span></div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="card dashboard-card p-3 h-100">
+                            <small class="dashboard-label">Balance total</small>
+                            <div id="summary-balance" class="dashboard-value">-- US$</div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="card dashboard-card p-3 h-100">
+                            <small class="dashboard-label">PnL sesión</small>
+                            <div id="summary-pnl-session" class="dashboard-value dashboard-value-success">$0.00</div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="card dashboard-card p-3 h-100">
+                            <small class="dashboard-label">PnL grid</small>
+                            <div id="summary-pnl-grid" class="dashboard-value">$0.00</div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="card dashboard-card p-3 h-100">
+                            <small class="dashboard-label">Operaciones totales</small>
+                            <div id="summary-total-operations" class="dashboard-value">0</div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="card dashboard-card p-3 h-100">
+                            <small class="dashboard-label">Balances</small>
+                            <div id="summary-balances" class="dashboard-value">
+                                <div class="balance-row"><span class="bal-label">Disponible:</span> <span class="bal-value" id="bal-available">-- US$</span></div>
+                                <div class="balance-row"><span class="bal-label">Órdenes:</span> <span class="bal-value" id="bal-orders">-- US$</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Dos cuadros grandes para contenido adicional -->
+                <div class="row mb-4" style="margin-top: 30px;">
+                    <div class="col-md-6">
+                        <div class="card dashboard-card p-4" style="height: 420px;">
+                            <div class="d-flex flex-column h-100">
+                                <div class="d-flex align-items-center justify-content-between mb-2">
+                                    <h6 class="fw-bold mb-0" style="color: var(--text);">Balance total (histórico)</h6>
+                                    <div class="d-flex align-items-center gap-3">
+                                        
+                                        <div class="d-flex align-items-center gap-2">
+                                            <select class="form-select form-select-sm chart-filter-select" id="timeframeSelect" onchange="filterHistory(this.value)" style="width: auto; min-width: 100px;">
+                                                <option value="24">1 día</option>
+                                                <option value="168">7 días</option>
+                                                <option value="360">15 días</option>
+                                                <option value="720">30 días</option>
+                                                <option value="2160">90 días</option>
+                                                <option value="all" selected>Todo</option>
+                                            </select>
+                                            <select class="form-select form-select-sm chart-filter-select" id="exchangeSelect" style="width: auto; min-width: 120px;">
+                                                <option value="binance" selected>Binance</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="flex-grow-1 d-flex align-items-center justify-content-center">
+                                    <div id="balanceChartHistory" class="chart-container" style="height: calc(100% - 48px); width: 100%;"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card dashboard-card p-4" style="height: 420px;">
+                            <div class="d-flex flex-column h-100">
+                                <h6 class="fw-bold mb-3" style="color: var(--text);">Top Operaciones Grid Trading</h6>
+                                <div class="flex-grow-1 d-flex flex-column" style="overflow-y: auto;">
+                                    <div id="top-strategies-container" class="top-strategies-list">
+                                        <p class="text-muted text-center small py-5">Cargando operaciones...</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="tab-pane fade" id="content-home" role="tabpanel">
+                
+                <div class="section-title"><i class="fa-solid fa-bolt me-1"></i> Sesión Actual</div>
+                <div class="row mb-4">
+                    <div class="col-md-3"><div class="card p-3 border-l-session h-100"><span class="stat-lbl">Beneficio Sesión</span><span id="dash-profit-session" class="stat-val text-success">--</span></div></div>
+                    <div class="col-md-3"><div class="card p-3 border-l-session h-100"><span class="stat-lbl">Operaciones</span><span id="dash-trades-session" class="stat-val">--</span></div></div>
+                    <div class="col-md-3"><div class="card p-3 border-l-session h-100"><span class="stat-lbl">Mejor Moneda</span><span id="dash-coin-session" class="stat-val">--</span></div></div>
+                    <div class="col-md-3"><div class="card p-3 border-l-session h-100"><span class="stat-lbl">Tiempo Activo</span><span id="dash-uptime-session" class="stat-val text-primary">--</span></div></div>
+                </div>
+
+                <div class="section-title"><i class="fa-solid fa-database me-1"></i> Histórico Global</div>
+                <div class="row mb-4">
+                    <div class="col-md-3"><div class="card p-3 border-l-global h-100"><span class="stat-lbl">Beneficio Total</span><span id="dash-profit-total" class="stat-val">--</span></div></div>
+                    <div class="col-md-3"><div class="card p-3 border-l-global h-100"><span class="stat-lbl">Operaciones Totales</span><span id="dash-trades-total" class="stat-val">--</span></div></div>
+                    <div class="col-md-3"><div class="card p-3 border-l-global h-100"><span class="stat-lbl">Top Moneda Histórica</span><span id="dash-coin-total" class="stat-val">--</span></div></div>
+                    <div class="col-md-3"><div class="card p-3 border-l-global h-100"><span class="stat-lbl">Tiempo Total Absoluto</span><span id="dash-uptime-total" class="stat-val text-secondary">--</span></div></div>
+                </div>
+
+                <div class="row mb-4">
+                    <div class="col-lg-4">
+                        <div class="card h-100">
+                            <div class="card-header border-l-session"><i class="fa-solid fa-chart-pie me-2"></i> Operaciones (Sesión)</div>
+                            <div class="card-body"><div id="sessionTradesChart" class="chart-pie"></div></div>
+                        </div>
+                    </div>
+                    <div class="col-lg-4">
+                        <div class="card h-100">
+                            <div class="card-header border-l-global"><i class="fa-solid fa-chart-pie me-2"></i> Operaciones (Global)</div>
+                            <div class="card-body"><div id="globalTradesChart" class="chart-pie"></div></div>
+                        </div>
+                    </div>
+                    <div class="col-lg-4">
+                        <div class="card h-100">
+                            <div class="card-header"><i class="fa-solid fa-wallet me-2"></i> Distribución Cartera</div>
+                            <div class="card-body"><div id="pieChart" class="chart-pie"></div></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mb-4">
+                    <div class="col-lg-6">
+                        <div class="card h-100">
+                            <div class="card-header border-l-session">
+                                <i class="fa-solid fa-chart-line me-2"></i> Evolución Cartera (Sesión)
+                            </div>
+                            <div class="card-body">
+                                <div id="balanceChartSession" class="chart-container"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-6">
+                        <div class="card h-100">
+                            <div class="card-header border-l-global d-flex justify-content-between align-items-center">
+                                <span><i class="fa-solid fa-chart-line me-2"></i> Evolución Cartera (Global)</span>
+                                <div class="btn-group" role="group">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm hist-btn active" onclick="filterHistory('all')">Todo</button>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm hist-btn" onclick="filterHistory(24)">24h</button>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm hist-btn" onclick="filterHistory(168)">7d</button>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div id="balanceChartGlobal" class="chart-container"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="card h-100">
+                            <div class="card-header"><i class="fa-solid fa-layer-group me-2"></i> Estrategias Activas y Rendimiento</div>
+                            <div class="card-body p-0 table-responsive">
+                                <table class="table table-hover align-middle mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Par</th>
+                                            <th>Estado</th>
+                                            <th>Configuración (Grid)</th>
+                                            <th>Trades Totales</th>
+                                            <th>PnL Acumulado</th>
+                                            <th>PnL Sesión</th> <th class="text-end">Detalles</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="strategies-table-body">
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header bg-white text-dark border-bottom">
+                                <i class="fa-solid fa-list-ul me-2"></i> Órdenes Activas (Todos los mercados)
+                            </div>
+                            <div class="card-body p-0 table-responsive" style="max-height: 400px;">
+                                <table class="table table-striped table-hover mb-0 align-middle">
+                                    <thead class="table-light sticky-top">
+                                        <tr>
+                                            <th>Par</th>
+                                            <th>Tipo</th>
+                                            <th>Precio Orden</th>
+                                            <th>Precio Entrada</th>
+                                            <th>Precio Actual</th>
+                                            <th>PnL (Latente)</th>
+                                            <th>Valor ($)</th>
+                                            <th class="text-end">Acción</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="global-orders-table">
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- WALLET TAB -->
+            <div class="tab-pane fade" id="content-wallet" role="tabpanel">
+                <div class="card border-0 shadow-sm mt-3">
+                    <div class="card-header bg-white border-bottom py-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0 fw-bold"><i class="fa-solid fa-coins me-2 text-warning"></i> Balance de Cartera <span class="ms-2 text-muted fw-normal fs-6">(Spot)</span></h5>
+                            
+                            <!-- INFO COMPTE (VIP / FEES) - AFEGIT MARGE ESQUERRA EXTRA (ms-5) -->
+                            <div id="account-info-badge" class="d-none ms-5 me-auto d-flex align-items-center gap-2">
+                                <span class="fw-bold text-dark fs-6 me-2">Nivell VIP i Comissions:</span>
+                                <span class="badge bg-secondary text-white fs-6 px-3 py-2 shadow-sm" title="Nivel VIP">
+                                    <i class="fa-solid fa-crown me-2"></i><span id="acc-tier">--</span>
+                                </span>
+                                <span class="badge bg-secondary text-white fs-6 px-3 py-2 shadow-sm" title="Comisiones Maker/Taker (%)">
+                                    <i class="fa-solid fa-tag me-2"></i><span id="acc-fees">--</span>
+                                </span>
+                            </div>
+                            <!-- -------------------------------------------------- -->
+                            
+                            <button class="btn btn-primary btn-sm" onclick="loadWallet()"><i class="fa-solid fa-rotate me-1"></i> Actualizar</button>
+                        </div>
+                        <small class="text-muted">Mostrando solo activos con valor superior a 1.00 USDC.</small>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Activo</th>
+                                        <th>Disponible (Libre)</th>
+                                        <th>Bloqueado (Órdenes)</th>
+                                        <th>Total</th>
+                                        <th>Valor Aprox. (USDC)</th>
+                                        <th class="text-end">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="wallet-table-body">
+                                    <tr><td colspan="6" class="text-center py-4"><div class="spinner-border text-primary" role="status"></div></td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CONFIG TAB -->
+            <div class="tab-pane fade" id="content-config" role="tabpanel">
+                <div id="config-alert" class="alert alert-info" style="display:none"></div>
+                
+                <div class="card mb-4 border-primary">
+                    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center"><span><i class="fa-solid fa-microchip me-2"></i> Sistema Global</span></div>
+                    <div class="card-body">
+                        <div class="row align-items-center mb-3">
+                            <div class="col-md-4"><label class="form-label">Ciclo de Actualización (Segundos)</label><div class="input-group"><span class="input-group-text"><i class="fa-regular fa-clock"></i></span><input type="number" class="form-control" id="sys-cycle" min="1" max="60"></div><div class="form-text">Tiempo de espera entre revisiones del mercado.</div></div>
+                            <div class="col-md-8 text-end"><button class="btn btn-success btn-lg" onclick="saveConfigForm()"><i class="fa-solid fa-floppy-disk me-2"></i> GUARDAR CAMBIOS</button></div>
+                        </div>
+
+                        <div class="row p-3 bg-light border rounded mx-0">
+                            <div class="col-md-6">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="sys-testnet">
+                                    <label class="form-check-label fw-bold" for="sys-testnet">
+                                        MODO TESTNET (Simulación)
+                                    </label>
+                                    <div class="form-text">Si desmarcas esta casilla, operarás con DINERO REAL.</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="sys-telegram">
+                                    <label class="form-check-label fw-bold" for="sys-telegram">
+                                        <i class="fa-brands fa-telegram text-primary"></i> ALERTAS TELEGRAM
+                                    </label>
+                                    <div class="form-text">Activa o desactiva el envío de notificaciones.</div>
+                                </div>
+                            </div>
+                            
+                            <!-- AÑADIDO: Botón Ajustar Capital -->
+                            <div class="col-12 mt-3">
+                                <hr>
+                                <label class="form-label text-muted small text-uppercase fw-bold">Contabilidad</label>
+                                <div class="d-flex align-items-center">
+                                    <button class="btn btn-outline-info" onclick="openCapitalAdjustment()">
+                                        <i class="fa-solid fa-money-bill-transfer me-2"></i> Ajustar Capital (Ingresos/Retiros)
+                                    </button>
+                                    <div class="form-text ms-3 mb-0">Registrar movimientos de fondos sin afectar al cálculo de Beneficios (PnL).</div>
+                                </div>
+                            </div>
+                            <!-- FIN AÑADIDO -->
+                            
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-4 border-secondary">
+                    <div class="card-header bg-secondary text-white fw-bold">
+                        <i class="fa-solid fa-gamepad me-2"></i> Control de Operaciones (Básicos)
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-2">
+                            <div class="col-md-3">
+                                <button class="btn btn-outline-success w-100 py-3 fw-bold" onclick="startEngine()">
+                                    <i class="fa-solid fa-power-off me-2"></i> ARRANCAR MOTOR
+                                </button>
+                                <div class="text-center small text-muted mt-1">Inicia el sistema</div>
+                            </div>
+                            <div class="col-md-3">
+                                <button class="btn btn-outline-danger w-100 py-3 fw-bold" onclick="stopEngine()">
+                                    <i class="fa-solid fa-stop me-2"></i> DETENER MOTOR
+                                </button>
+                                <div class="text-center small text-muted mt-1">Apaga el sistema</div>
+                            </div>
+                            
+                            <!-- MODIFICADO: Botones PAUSAR i REANUDAR ahora son 'outline' -->
+                            <div class="col-md-3">
+                                <button class="btn btn-outline-warning w-100 py-3 fw-bold" onclick="panicStop()">
+                                    <i class="fa-solid fa-pause me-2"></i> PAUSAR
+                                </button>
+                                <div class="text-center small text-muted mt-1">Mantiene órdenes, para lógica</div>
+                            </div>
+                            <div class="col-md-3">
+                                <button class="btn btn-outline-info w-100 py-3 fw-bold" onclick="panicStart()">
+                                    <i class="fa-solid fa-play me-2"></i> REANUDAR
+                                </button>
+                                <div class="text-center small text-muted mt-1">Continúa desde pausa</div>
+                            </div>
+                            <!-- FINAL MODIFICACIÓN -->
+                            
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-4 border-info">
+                    <div class="card-header bg-info text-dark fw-bold">
+                        <i class="fa-solid fa-database me-2"></i> Gestión de Datos y Mantenimiento
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-2">
+                            <div class="col-md-4 mb-2">
+                                <label class="fw-bold small text-muted">Historial y Gráficas (Global):</label>
+                                <div class="d-flex gap-2">
+                                    <button class="btn btn-sm btn-outline-dark w-100" onclick="resetGlobalChart()">
+                                        <i class="fa-solid fa-chart-line me-1"></i> Reset Gráfica Global
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-dark w-100" onclick="resetGlobalPnL()">
+                                        <i class="fa-solid fa-eraser me-1"></i> Reset PnL Global
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-4 mb-2">
+                                <label class="fw-bold small text-muted">Datos de Sesión:</label>
+                                <button class="btn btn-sm btn-outline-dark w-100" onclick="resetSessionChart()">
+                                    <i class="fa-solid fa-clock-rotate-left me-1"></i> Reiniciar Sesión (Completo)
+                                </button>
+                                <div class="form-text small">Reinicia Gráfica Sesión + PnL Sesión.</div>
+                            </div>
+
+                            <div class="col-md-4 mb-2">
+                                <label class="fw-bold small text-muted">Mantenimiento:</label>
+                                <button class="btn btn-sm btn-outline-primary w-100" onclick="refreshOrders()">
+                                    <i class="fa-solid fa-rotate me-2"></i> Limpiar caché de Órdenes
+                                </button>
+                                <div class="form-text small">Elimina órdenes "fantasma" sin borrar en Exchange.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <h5 class="mb-3 text-muted border-bottom pb-2">Configuración por Moneda</h5>
+                <div class="row" id="coins-config-container"><div class="text-center py-5"><div class="spinner-border text-primary"></div></div></div>
+                
+                <div class="card border-danger mt-5">
+                    <div class="card-header bg-danger text-white">
+                        <i class="fa-solid fa-triangle-exclamation me-2"></i> Zona de Peligro
+                    </div>
+                    <div class="card-body">
+                        
+                        <div class="d-flex justify-content-between align-items-center border-bottom pb-3 mb-3">
+                            <div>
+                                <h6 class="text-danger fw-bold">Reiniciar Todo (Fábrica)</h6>
+                                <p class="mb-0 small text-muted">Borra TODO el historial, gráficas y contadores.</p>
+                            </div>
+                            <button class="btn btn-outline-danger" onclick="resetStatistics()">
+                                <i class="fa-solid fa-trash-can me-2"></i> RESET TOTAL
+                            </button>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-2">
+                                <button class="btn btn-danger w-100 fw-bold" onclick="panicCancel()">
+                                    <i class="fa-solid fa-ban me-2"></i> CANCELAR TODAS LAS ÓRDENES
+                                </button>
+                                <div class="form-text text-center">Borra órdenes del Exchange (Mantiene monedas).</div>
+                            </div>
+                            <div class="col-md-6 mb-2">
+                                <button class="btn btn-dark w-100 fw-bold border-danger text-danger" onclick="panicSell()">
+                                    <i class="fa-solid fa-fire me-2"></i> PÁNICO: VENDER TODO (USDC)
+                                </button>
+                                <div class="form-text text-center">Cancela y vende a mercado inmediatamente.</div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+                
+            </div>
+
+        </div>
+    </div>
+
+    <!-- FOOTER COMO TARJETA GLOBAL DEBAJO DEL CONTENIDO -->
+    <footer class="container-fluid px-4" style="margin-top: -10px;">
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <div class="card dashboard-card dashboard-footer-card p-3 h-100 text-center">
+                    <h5 class="text-uppercase mb-3 fw-bold letter-spacing-1">GridBot Pro</h5>
+                    <div class="d-flex justify-content-center gap-4 mt-2 mb-3">
+                        <a href="https://x.com" target="_blank" class="social-link" title="X (Twitter)">
+                            <i class="fa-brands fa-x-twitter"></i>
+                        </a>
+                        <a href="#" target="_blank" class="social-link" title="Telegram">
+                            <i class="fa-brands fa-telegram"></i>
+                        </a>
+                        <a href="https://github.com/catlinux/gridbot_binance" target="_blank" class="social-link" title="GitHub">
+                            <i class="fa-brands fa-github"></i>
+                        </a>
+                    </div>
+
+                    <div class="mb-3">
+                        <button class="btn btn-outline-light btn-sm" data-bs-toggle="modal" data-bs-target="#donationModal">
+                            <i class="fa-solid fa-heart me-2 text-danger"></i> Ayudar al proyecto
+                        </button>
+                    </div>
+
+                    <div class="disclaimer-box mx-auto text-start">
+                        <p class="mb-2 text-white"><strong>AVISO LEGAL Y RESPONSABILIDAD</strong></p>
+                        <p class="mb-0 text-white-75">
+                            Este software es un proyecto desarrollado con <strong>fines exclusivamente educativos y de aprendizaje</strong>. El uso de herramientas de trading automático conlleva un alto riesgo de pérdida de capital.
+                            <strong>Marc Sancho</strong> no se hace responsable, directa ni indirectamente, de cualquier daño, pérdida financiera, lucro cesante o error de ejecución derivado del uso, configuración o fallo de este software.
+                            El usuario asume toda la responsabilidad de las operaciones realizadas. Se recomienda encarecidamente utilizar la red de prueba (<strong>Testnet</strong>) antes de operar con dinero real.
+                        </p>
+                    </div>
+
+                    <p class="small text-white-50 mb-0 mt-4">&copy; 2025 Marc Sancho. Open Source Project.</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    </div> <!-- Fin Main Container -->
+
+    <!-- MODAL DONACIONES -->
+    <div class="modal fade" id="donationModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content donation-modal">
+                <div class="modal-header donation-modal-header">
+                    <h5 class="modal-title fw-bold">Ayudar al Proyecto</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body donation-modal-body">
+                    <p class="mb-4 text-center">Si te gusta esta herramienta y quieres colaborar con su mantenimiento y mejora, puedes hacer una aportación a las siguientes direcciones crypto:</p>
+                    
+                    <div class="mb-4 donation-address-block">
+                        <label class="fw-bold donation-label">Solana (SOL):</label>
+                        <div class="crypto-addr mt-2">GbAFM55PyBb2otqUb1oTTtqzE39fwE6XS7HVsCCwX5Tw</div>
+                    </div>
+
+                    <div class="mb-4 donation-address-block">
+                        <label class="fw-bold donation-label">Polygon (MATIC):</label>
+                        <div class="crypto-addr mt-2">0x5dD9a7b2D831A319a68214C11015f64Dbc6bb79c</div>
+                    </div>
+
+                    <div class="donation-info-box">
+                        <p class="mb-0 small">Asegúrate de elegir la red correcta para evitar errores.<br><strong>No necesitamos un TAG.</strong><br>Si haces la donación desde un exchange y te fuerza a poner uno, escribe <strong>0</strong>.</p>
+                    </div>
+                </div>
+                <div class="modal-footer donation-modal-footer">
+                    <button type="button" class="btn donation-btn-close" data-bs-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts de Bootstrap -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Lógica de Frontend (Módulos ES6) -->
+    <script type="module" src="/static/js/dashboard.js"></script>
+
+</body>
+</html>

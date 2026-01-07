@@ -1,0 +1,114 @@
+{
+  "system": {
+    "cycle_delay": 5,
+    "log_level": "INFO",
+    "use_testnet": false,
+    "telegram_enabled": false
+  },
+  "default_strategy": {
+    "grids_quantity": 10,
+    "amount_per_grid": 50,
+    "grid_spread": 1,
+    "start_mode": "wait",
+    "strategy_profile": "manual",
+    "trailing_enabled": false
+  },
+  "pairs": [
+    {
+      "symbol": "BTC/USDC",
+      "enabled": false,
+      "strategy": {
+        "grids_quantity": 10,
+        "amount_per_grid": 14,
+        "grid_spread": 0.5,
+        "start_mode": "buy_2",
+        "strategy_profile": "manual",
+        "trailing_enabled": true
+      }
+    },
+    {
+      "symbol": "ETH/USDC",
+      "enabled": false,
+      "strategy": {
+        "grids_quantity": 10,
+        "amount_per_grid": 14,
+        "grid_spread": 0.8,
+        "start_mode": "buy_1",
+        "strategy_profile": "manual",
+        "trailing_enabled": true
+      }
+    },
+    {
+      "symbol": "BNB/USDC",
+      "enabled": false,
+      "strategy": {
+        "grids_quantity": 8,
+        "amount_per_grid": 10,
+        "grid_spread": 0.6,
+        "start_mode": "buy_2",
+        "strategy_profile": "manual",
+        "trailing_enabled": true
+      }
+    },
+    {
+      "symbol": "SOL/USDC",
+      "enabled": false,
+      "strategy": {
+        "grids_quantity": 14,
+        "amount_per_grid": 10,
+        "grid_spread": 0.6,
+        "start_mode": "buy_1",
+        "strategy_profile": "moderate",
+        "trailing_enabled": true
+      }
+    },
+    {
+      "symbol": "ADA/USDC",
+      "enabled": false,
+      "strategy": {
+        "grids_quantity": 10,
+        "amount_per_grid": 10,
+        "grid_spread": 0.6,
+        "start_mode": "buy_1",
+        "strategy_profile": "manual",
+        "trailing_enabled": true
+      }
+    },
+    {
+      "symbol": "XRP/USDC",
+      "enabled": false,
+      "strategy": {
+        "grids_quantity": 10,
+        "amount_per_grid": 14,
+        "grid_spread": 0.8,
+        "start_mode": "buy_1",
+        "strategy_profile": "manual",
+        "trailing_enabled": true
+      }
+    },
+    {
+      "symbol": "DOGE/USDC",
+      "enabled": false,
+      "strategy": {
+        "grids_quantity": 14,
+        "amount_per_grid": 10,
+        "grid_spread": 0.6,
+        "start_mode": "wait",
+        "strategy_profile": "manual",
+        "trailing_enabled": true
+      }
+    },
+    {
+      "symbol": "PAXG/USDC",
+      "enabled": false,
+      "strategy": {
+        "grids_quantity": 16,
+        "amount_per_grid": 20,
+        "grid_spread": 0.3,
+        "start_mode": "buy_2",
+        "strategy_profile": "aggressive",
+        "trailing_enabled": true
+      }
+    }
+  ]
+}

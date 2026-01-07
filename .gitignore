@@ -1,0 +1,135 @@
+# =============================================================================
+# GridBot Pro - .gitignore (Minimal & secure)
+# Purpose: Exclude sensitive files, credentials, virtualenvs, DBs and artifacts
+# =============================================================================
+
+# -----------------------------
+# CRITICAL: Secrets and env files
+# -----------------------------
+.env
+.env.*
+config/.env
+config/*.env
+secret.*
+*.key
+*.pem
+*.secret
+*.p12
+credentials.json
+
+# -----------------------------
+# Virtual environments & runtime
+# -----------------------------
+.venv/
+venv/
+env/
+ENV/
+.venv
+.venv/*
+
+# -----------------------------
+# Dependency and package managers
+# -----------------------------
+pip-log.txt
+pip-delete-this-directory.txt
+pip-wheel-metadata/
+*.egg-info/
+
+# -----------------------------
+# Python cache / build artifacts
+# -----------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyre/
+.coverage
+htmlcov/
+
+# -----------------------------
+# Database / Data (sensitive)
+# -----------------------------
+data/
+*.db
+*.sqlite
+*.sqlite3
+*.db-shm
+*.db-wal
+*.db-journal
+
+# -----------------------------
+# Logs and runtime files
+# -----------------------------
+logs/
+*.log
+*.log.*
+crash_logs/
+*.dump
+
+# -----------------------------
+# Editor / IDE
+# -----------------------------
+.vscode/
+.idea/
+*.sublime-*
+.project
+.pydevproject
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# -----------------------------
+# OS / System
+# -----------------------------
+Desktop.ini
+$RECYCLE.BIN/
+.Trashes
+.Spotlight-V100
+
+# -----------------------------
+# Node / Frontend
+# -----------------------------
+node_modules/
+npm-debug.log
+yarn-error.log
+.eslintcache
+
+# -----------------------------
+# Docker
+# -----------------------------
+.dockerignore
+docker-compose.override.yml
+
+# -----------------------------
+# Misc / Tools
+# -----------------------------
+dist/
+build/
+*.egg
+.wheelhouse/
+coverage.xml
+
+# -----------------------------
+# Project-specific: avoid accidentally committing generated / sensitive files
+# -----------------------------
+config/*.secret
+config/*.key
+config/*.pem
+config/*.cert
+
+# -----------------------------
+# Helpful reminder (not enforced): if a sensitive file was already committed,
+# remove it from the index with:
+#   git rm --cached path/to/file
+# then commit and push the change. If pushed to remote and you need to purge history
+# use 'bfg' or 'git filter-repo' (coordinate with collaborators).
+# -----------------------------
+
+# =============================================================================
+# NOTE: This file was regenerated to be strict about sensitive data. Verify it
+# and then remove sensitive files from the index (see above) before pushing.
+# =============================================================================

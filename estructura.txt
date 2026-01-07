@@ -1,0 +1,36 @@
+gridbot_binance/
+├── config/
+│   ├── config.json5                        # Configuración editable (Estrategias y Pares)
+│   ├── env.example                         # Archivo de muestra del .env
+│   └── .env                                # Claves API y Secretos (NO subir a Git)
+├── core/
+│   ├── __init__.py
+│   ├── bot.py                              # Lógica del Grid, Smart Reload y Cierre Manual
+│   ├── database.py                         # Gestión SQLite (Histórico, Sesión y Persistencia)
+│   └── exchange.py                         # Conector Binance (CCXT) y gestión de órdenes
+├── data/
+│   ├── bot_data.db                         # Base de datos principal (SQLite)
+│   ├── bot_data.db-shm                     # Índice de memoria compartida (temporal)
+│   └── bot_data.db-wal                     # Registro de escritura anticipada (temporal)
+├── utils/
+│   ├── __init__.py
+│   ├── logger.py                           # Sistema de logs y colores
+│   └── telegram.py                         # Sistema de alertas a Telegram
+├── web/
+│   ├── static/                             # Archivos estáticos (Frontend optimizado)
+│   │   ├── css/
+│   │   │   └── style.css                   # Estilos unificados (tema principal)
+│   │   └── js/
+│   │       ├── charts.js                   # Toda la lógica de gráficos
+│   │       ├── config.js                   # Lógica del formulario de configuración y estrategias RSI
+│   │       ├── dashboard.js                # (Principal): Lógica central, API, estado global e inicialización
+│   │       └── utils.js                    # Formateadores de texto, números y colores
+│   ├── templates/
+│   │   └── index.html                      # Estructura HTML base
+│   └── server.py                           # API Backend (FastAPI)
+├── .gitignore                              # Archivo de seguridad para mantener datos sensibles fuera de GitHub
+├── main.py                                 # Punto de entrada (Run)
+├── limpieza.py                             # Script de utilidad para cancelar todo
+├── estructura.txt                          # Estructura con árbol de archivos
+├── README.md                               # Archivo explicativo de las funciones del bot para GitHub
+└── requirements.txt                        # Librerías necesarias.
