@@ -73,34 +73,31 @@
                     </li>
 
                     <!-- Operaciones (oculta) -->
-                    <li class="nav-item" style="display: none;">
+                    <li class="nav-item d-none">
                         <button class="nav-link navbar-tab" id="tab-operaciones" data-bs-toggle="tab" data-bs-target="#content-home" type="button" onclick="setMode('home')">
                             Operaciones
                         </button>
                     </li>
 
-                    <li class="nav-item" style="display: none;">
-                        <button class="nav-link navbar-tab" id="tab-wallet" data-bs-toggle="tab" data-bs-target="#content-wallet" type="button" onclick="setMode('wallet')">
+                    <li class="nav-item d-none"> data-bs-toggle="tab" data-bs-target="#content-wallet" type="button" onclick="setMode('wallet')">
                             Backtest
                         </button>
                     </li>
 
-                    <li class="nav-item" style="display: none;">
-                        <button class="nav-link navbar-tab" id="tab-estrategias" data-bs-toggle="tab" data-bs-target="#content-wallet" type="button" onclick="setMode('wallet')">
+                    <li class="nav-item d-none"> data-bs-toggle="tab" data-bs-target="#content-wallet" type="button" onclick="setMode('wallet')">
                             Estrategias
                         </button>
                     </li>
 
-                    <li class="nav-item" style="display: none;">
+                    <li class="nav-item">
                         <button class="nav-link navbar-tab" id="tab-config" data-bs-toggle="tab" data-bs-target="#content-config" type="button" onclick="loadConfigForm()">
                             Configuración
                         </button>
                     </li>
                 </ul>
                 
-                <!-- Sección Derecha: Usuario, Email y Botón Salir -->
+                <!-- Sección Derecha: Botón Salir -->
                 <div class="ms-auto d-flex align-items-center gap-3">
-                    <span class="text-white small" id="user-email">admin.gridbot@gmail.com</span>
                     <button class="btn btn-danger btn-sm fw-bold">Salir</button>
                 </div>
             </div>
@@ -157,16 +154,16 @@
                 </div>
 
                 <!-- Dos cuadros grandes para contenido adicional -->
-                <div class="row mb-4" style="margin-top: 30px;">
+                <div class="row mb-4 config-row-margin">
                     <div class="col-md-6">
-                        <div class="card dashboard-card p-4" style="height: 420px;">
+                        <div class="card dashboard-card p-4 chart-card">
                             <div class="d-flex flex-column h-100">
                                 <div class="d-flex align-items-center justify-content-between mb-2">
-                                    <h6 class="fw-bold mb-0" style="color: var(--text);">Balance total (histórico)</h6>
+                                    <h6 class="fw-bold mb-0">Balance total (histórico)</h6>
                                     <div class="d-flex align-items-center gap-3">
                                         
                                         <div class="d-flex align-items-center gap-2">
-                                            <select class="form-select form-select-sm chart-filter-select" id="timeframeSelect" onchange="filterHistory(this.value)" style="width: auto; min-width: 100px;">
+                                            <select class="form-select form-select-sm chart-filter-select select-auto-width" id="timeframeSelect" onchange="filterHistory(this.value)">
                                                 <option value="24">1 día</option>
                                                 <option value="168">7 días</option>
                                                 <option value="360">15 días</option>
@@ -174,7 +171,7 @@
                                                 <option value="2160">90 días</option>
                                                 <option value="all" selected>Todo</option>
                                             </select>
-                                            <select class="form-select form-select-sm chart-filter-select" id="exchangeSelect" style="width: auto; min-width: 120px;">
+                                            <select class="form-select form-select-sm chart-filter-select select-auto-width-lg" id="exchangeSelect">
                                                 <option value="binance" selected>Binance</option>
                                             </select>
                                         </div>
@@ -182,16 +179,16 @@
                                 </div>
 
                                 <div class="flex-grow-1 d-flex align-items-center justify-content-center">
-                                    <div id="balanceChartHistory" class="chart-container" style="height: calc(100% - 48px); width: 100%;"></div>
+                                    <div id="balanceChartHistory" class="chart-container chart-container-custom"></div>
                                 </div>
                             </div>
                         </div>
                     </div>
                     <div class="col-md-6">
-                        <div class="card dashboard-card p-4" style="height: 420px;">
+                        <div class="card dashboard-card p-4 chart-card">
                             <div class="d-flex flex-column h-100">
-                                <h6 class="fw-bold mb-3" style="color: var(--text);">Top Operaciones Grid Trading</h6>
-                                <div class="flex-grow-1 d-flex flex-column" style="overflow-y: auto;">
+                                <h6 class="fw-bold mb-3">Top Operaciones Grid Trading</h6>
+                                <div class="flex-grow-1 d-flex flex-column overflow-y-auto">
                                     <div id="top-strategies-container" class="top-strategies-list">
                                         <p class="text-muted text-center small py-5">Cargando operaciones...</p>
                                     </div>
@@ -300,7 +297,7 @@
                             <div class="card-header bg-white text-dark border-bottom">
                                 <i class="fa-solid fa-list-ul me-2"></i> Órdenes Activas (Todos los mercados)
                             </div>
-                            <div class="card-body p-0 table-responsive" style="max-height: 400px;">
+                            <div class="card-body p-0 table-responsive table-max-height">
                                 <table class="table table-striped table-hover mb-0 align-middle">
                                     <thead class="table-light sticky-top">
                                         <tr>
@@ -371,172 +368,92 @@
 
             <!-- CONFIG TAB -->
             <div class="tab-pane fade" id="content-config" role="tabpanel">
-                <div id="config-alert" class="alert alert-info" style="display:none"></div>
+                <div id="config-alert" class="alert alert-info d-none"></div>
                 
-                <div class="card mb-4 border-primary">
-                    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center"><span><i class="fa-solid fa-microchip me-2"></i> Sistema Global</span></div>
-                    <div class="card-body">
-                        <div class="row align-items-center mb-3">
-                            <div class="col-md-4"><label class="form-label">Ciclo de Actualización (Segundos)</label><div class="input-group"><span class="input-group-text"><i class="fa-regular fa-clock"></i></span><input type="number" class="form-control" id="sys-cycle" min="1" max="60"></div><div class="form-text">Tiempo de espera entre revisiones del mercado.</div></div>
-                            <div class="col-md-8 text-end"><button class="btn btn-success btn-lg" onclick="saveConfigForm()"><i class="fa-solid fa-floppy-disk me-2"></i> GUARDAR CAMBIOS</button></div>
+                <!-- 4 TARJETAS SUPERIORES PEQUEÑAS -->
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <div class="card dashboard-card p-3 h-100">
+                            <small class="dashboard-label">Usuario</small>
+                            <div class="dashboard-value config-username" id="config-username">--</div>
                         </div>
-
-                        <div class="row p-3 bg-light border rounded mx-0">
-                            <div class="col-md-6">
-                                <div class="form-check form-switch">
-                                    <input class="form-check-input" type="checkbox" role="switch" id="sys-testnet">
-                                    <label class="form-check-label fw-bold" for="sys-testnet">
-                                        MODO TESTNET (Simulación)
-                                    </label>
-                                    <div class="form-text">Si desmarcas esta casilla, operarás con DINERO REAL.</div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card dashboard-card p-3 h-100">
+                            <small class="dashboard-label">Exchange</small>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div class="config-exchange-name" id="config-exchange-name">--</div>
+                                <div class="config-ping-container">
+                                    <div class="config-ping-indicator ping-indicator" id="config-ping-indicator"></div>
+                                    <span class="config-ping-value" id="config-ping-value">-- ms</span>
                                 </div>
                             </div>
-                            <div class="col-md-6">
-                                <div class="form-check form-switch">
-                                    <input class="form-check-input" type="checkbox" role="switch" id="sys-telegram">
-                                    <label class="form-check-label fw-bold" for="sys-telegram">
-                                        <i class="fa-brands fa-telegram text-primary"></i> ALERTAS TELEGRAM
-                                    </label>
-                                    <div class="form-text">Activa o desactiva el envío de notificaciones.</div>
-                                </div>
-                            </div>
-                            
-                            <!-- AÑADIDO: Botón Ajustar Capital -->
-                            <div class="col-12 mt-3">
-                                <hr>
-                                <label class="form-label text-muted small text-uppercase fw-bold">Contabilidad</label>
-                                <div class="d-flex align-items-center">
-                                    <button class="btn btn-outline-info" onclick="openCapitalAdjustment()">
-                                        <i class="fa-solid fa-money-bill-transfer me-2"></i> Ajustar Capital (Ingresos/Retiros)
-                                    </button>
-                                    <div class="form-text ms-3 mb-0">Registrar movimientos de fondos sin afectar al cálculo de Beneficios (PnL).</div>
-                                </div>
-                            </div>
-                            <!-- FIN AÑADIDO -->
-                            
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card dashboard-card p-3 h-100">
+                            <small class="dashboard-label">Tarjeta 3</small>
+                            <div class="dashboard-value">--</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card dashboard-card p-3 h-100">
+                            <small class="dashboard-label">Tarjeta 4</small>
+                            <div class="dashboard-value">--</div>
                         </div>
                     </div>
                 </div>
 
-                <div class="card mb-4 border-secondary">
-                    <div class="card-header bg-secondary text-white fw-bold">
-                        <i class="fa-solid fa-gamepad me-2"></i> Control de Operaciones (Básicos)
-                    </div>
-                    <div class="card-body">
-                        <div class="row g-2">
-                            <div class="col-md-3">
-                                <button class="btn btn-outline-success w-100 py-3 fw-bold" onclick="startEngine()">
-                                    <i class="fa-solid fa-power-off me-2"></i> ARRANCAR MOTOR
-                                </button>
-                                <div class="text-center small text-muted mt-1">Inicia el sistema</div>
-                            </div>
-                            <div class="col-md-3">
-                                <button class="btn btn-outline-danger w-100 py-3 fw-bold" onclick="stopEngine()">
-                                    <i class="fa-solid fa-stop me-2"></i> DETENER MOTOR
-                                </button>
-                                <div class="text-center small text-muted mt-1">Apaga el sistema</div>
-                            </div>
-                            
-                            <!-- MODIFICADO: Botones PAUSAR i REANUDAR ahora son 'outline' -->
-                            <div class="col-md-3">
-                                <button class="btn btn-outline-warning w-100 py-3 fw-bold" onclick="panicStop()">
-                                    <i class="fa-solid fa-pause me-2"></i> PAUSAR
-                                </button>
-                                <div class="text-center small text-muted mt-1">Mantiene órdenes, para lógica</div>
-                            </div>
-                            <div class="col-md-3">
-                                <button class="btn btn-outline-info w-100 py-3 fw-bold" onclick="panicStart()">
-                                    <i class="fa-solid fa-play me-2"></i> REANUDAR
-                                </button>
-                                <div class="text-center small text-muted mt-1">Continúa desde pausa</div>
-                            </div>
-                            <!-- FINAL MODIFICACIÓN -->
-                            
-                        </div>
-                    </div>
-                </div>
+                <!-- 2 TARJETAS INFERIORES: Izquierda alineada con tarjeta superior + 75% -->
+                <div class="row mb-4 config-row-margin">
+                    <div class="col-md-3">
+                        <div class="card dashboard-card p-4 config-card-full">
+                            <h6 class="fw-bold config-card-title">Gestión de Usuario</h6>
+                            <div class="config-card-content">
+                                <!-- SECCIÓN AUTENTICACIÓN -->
+                                <div id="auth-section">
+                                    <!-- Botones de login/crear usuario -->
+                                    <div class="auth-buttons-container" id="auth-buttons">
+                                        <button class="btn btn-sm btn-primary w-100 d-none" id="btn-login" onclick="openLoginModal()">
+                                            <i class="fa-solid fa-sign-in-alt me-2"></i> Login
+                                        </button>
+                                        <button class="btn btn-sm btn-create-user w-100 d-none" id="btn-create-user" onclick="openCreateUserModal()">
+                                            <i class="fa-solid fa-user-plus me-2"></i> Crear Usuario
+                                        </button>
+                                        <button class="btn btn-sm btn-link btn-recovery w-100 btn-recovery-link d-none" id="btn-recovery" onclick="openRecoveryModal()">
+                                            ¿Olvidó contraseña?
+                                        </button>
+                                    </div>
 
-                <div class="card mb-4 border-info">
-                    <div class="card-header bg-info text-dark fw-bold">
-                        <i class="fa-solid fa-database me-2"></i> Gestión de Datos y Mantenimiento
-                    </div>
-                    <div class="card-body">
-                        <div class="row g-2">
-                            <div class="col-md-4 mb-2">
-                                <label class="fw-bold small text-muted">Historial y Gráficas (Global):</label>
-                                <div class="d-flex gap-2">
-                                    <button class="btn btn-sm btn-outline-dark w-100" onclick="resetGlobalChart()">
-                                        <i class="fa-solid fa-chart-line me-1"></i> Reset Gráfica Global
-                                    </button>
-                                    <button class="btn btn-sm btn-outline-dark w-100" onclick="resetGlobalPnL()">
-                                        <i class="fa-solid fa-eraser me-1"></i> Reset PnL Global
-                                    </button>
+                                    <!-- Usuario logueado -->
+                                    <div class="auth-logged-section" id="auth-logged">
+                                        <div class="auth-logged-label">Conectado como</div>
+                                        <div class="auth-logged-username" id="logged-username">--</div>
+                                        <button class="btn btn-sm btn-outline-danger w-100" id="btn-logout" onclick="logout()">
+                                            <i class="fa-solid fa-sign-out-alt me-2"></i> Cerrar Sesión
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
-                            
-                            <div class="col-md-4 mb-2">
-                                <label class="fw-bold small text-muted">Datos de Sesión:</label>
-                                <button class="btn btn-sm btn-outline-dark w-100" onclick="resetSessionChart()">
-                                    <i class="fa-solid fa-clock-rotate-left me-1"></i> Reiniciar Sesión (Completo)
-                                </button>
-                                <div class="form-text small">Reinicia Gráfica Sesión + PnL Sesión.</div>
-                            </div>
-
-                            <div class="col-md-4 mb-2">
-                                <label class="fw-bold small text-muted">Mantenimiento:</label>
-                                <button class="btn btn-sm btn-outline-primary w-100" onclick="refreshOrders()">
-                                    <i class="fa-solid fa-rotate me-2"></i> Limpiar caché de Órdenes
-                                </button>
-                                <div class="form-text small">Elimina órdenes "fantasma" sin borrar en Exchange.</div>
+                        </div>
+                    </div>
+                    <div class="col-md-9">
+                        <div class="card dashboard-card p-4 config-card-full">
+                            <h6 class="fw-bold config-card-title">Contenido Derecho</h6>
+                            <div class="flex-grow">
+                                <!-- Contenido a definir -->
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <h5 class="mb-3 text-muted border-bottom pb-2">Configuración por Moneda</h5>
-                <div class="row" id="coins-config-container"><div class="text-center py-5"><div class="spinner-border text-primary"></div></div></div>
-                
-                <div class="card border-danger mt-5">
-                    <div class="card-header bg-danger text-white">
-                        <i class="fa-solid fa-triangle-exclamation me-2"></i> Zona de Peligro
-                    </div>
-                    <div class="card-body">
-                        
-                        <div class="d-flex justify-content-between align-items-center border-bottom pb-3 mb-3">
-                            <div>
-                                <h6 class="text-danger fw-bold">Reiniciar Todo (Fábrica)</h6>
-                                <p class="mb-0 small text-muted">Borra TODO el historial, gráficas y contadores.</p>
-                            </div>
-                            <button class="btn btn-outline-danger" onclick="resetStatistics()">
-                                <i class="fa-solid fa-trash-can me-2"></i> RESET TOTAL
-                            </button>
-                        </div>
-
-                        <div class="row">
-                            <div class="col-md-6 mb-2">
-                                <button class="btn btn-danger w-100 fw-bold" onclick="panicCancel()">
-                                    <i class="fa-solid fa-ban me-2"></i> CANCELAR TODAS LAS ÓRDENES
-                                </button>
-                                <div class="form-text text-center">Borra órdenes del Exchange (Mantiene monedas).</div>
-                            </div>
-                            <div class="col-md-6 mb-2">
-                                <button class="btn btn-dark w-100 fw-bold border-danger text-danger" onclick="panicSell()">
-                                    <i class="fa-solid fa-fire me-2"></i> PÁNICO: VENDER TODO (USDC)
-                                </button>
-                                <div class="form-text text-center">Cancela y vende a mercado inmediatamente.</div>
-                            </div>
-                        </div>
-
-                    </div>
-                </div>
-                
             </div>
 
         </div>
     </div>
 
     <!-- FOOTER COMO TARJETA GLOBAL DEBAJO DEL CONTENIDO -->
-    <footer class="container-fluid px-4" style="margin-top: -10px;">
+    <footer class="container-fluid px-4 footer-spacing">
         <div class="row mb-4">
             <div class="col-md-12">
                 <div class="card dashboard-card dashboard-footer-card p-3 h-100 text-center">
@@ -579,21 +496,21 @@
     <!-- MODAL DONACIONES -->
     <div class="modal fade" id="donationModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content donation-modal">
-                <div class="modal-header donation-modal-header">
-                    <h5 class="modal-title fw-bold">Ayudar al Proyecto</h5>
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold"><i class="fa-solid fa-heart me-2"></i>Ayudar al Proyecto</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-                <div class="modal-body donation-modal-body">
+                <div class="modal-body">
                     <p class="mb-4 text-center">Si te gusta esta herramienta y quieres colaborar con su mantenimiento y mejora, puedes hacer una aportación a las siguientes direcciones crypto:</p>
                     
                     <div class="mb-4 donation-address-block">
-                        <label class="fw-bold donation-label">Solana (SOL):</label>
+                        <label class="fw-bold">Solana (SOL):</label>
                         <div class="crypto-addr mt-2">GbAFM55PyBb2otqUb1oTTtqzE39fwE6XS7HVsCCwX5Tw</div>
                     </div>
 
                     <div class="mb-4 donation-address-block">
-                        <label class="fw-bold donation-label">Polygon (MATIC):</label>
+                        <label class="fw-bold">Polygon (MATIC):</label>
                         <div class="crypto-addr mt-2">0x5dD9a7b2D831A319a68214C11015f64Dbc6bb79c</div>
                     </div>
 
@@ -601,8 +518,133 @@
                         <p class="mb-0 small">Asegúrate de elegir la red correcta para evitar errores.<br><strong>No necesitamos un TAG.</strong><br>Si haces la donación desde un exchange y te fuerza a poner uno, escribe <strong>0</strong>.</p>
                     </div>
                 </div>
-                <div class="modal-footer donation-modal-footer">
-                    <button type="button" class="btn donation-btn-close" data-bs-dismiss="modal">Cerrar</button>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL LOGIN -->
+    <div class="modal fade" id="loginModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold"><i class="fa-solid fa-sign-in-alt me-2"></i>Iniciar Sesión</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="loginForm">
+                        <div class="mb-3">
+                            <label for="login-username" class="form-label">Usuario</label>
+                            <input type="text" class="form-control" id="login-username" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="login-password" class="form-label">Contraseña</label>
+                            <input type="password" class="form-control" id="login-password" required>
+                        </div>
+                        <div id="login-error" class="alert alert-danger d-none"></div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" onclick="performLogin()">Entrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL CREAR USUARIO -->
+    <div class="modal fade" id="createUserModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold"><i class="fa-solid fa-user-plus me-2"></i>Crear Nueva Cuenta</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning" role="alert">
+                        <i class="fa-solid fa-shield me-2"></i><strong>Importante:</strong> Esta aplicación solo permite <strong>un usuario único</strong> por razones de seguridad. Solo el propietario del bot puede crear una cuenta. No podrá crear múltiples usuarios.
+                    </div>
+                    
+                    <form id="createUserForm">
+                        <div class="mb-3">
+                            <label for="create-username" class="form-label">Nombre de Usuario</label>
+                            <input type="text" class="form-control" id="create-username" required>
+                            <small class="form-text text-muted">Min. 4 caracteres, solo letras y números</small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="create-email" class="form-label">Correo Electrónico</label>
+                            <input type="email" class="form-control" id="create-email" required>
+                            <small class="form-text text-muted">Para futuras recuperaciones</small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="create-security-question" class="form-label">Pregunta de Seguridad</label>
+                            <select class="form-select" id="create-security-question" required>
+                                <option value="">Selecciona una pregunta</option>
+                                <option value="1">¿Cuál es el nombre de tu primer mascota?</option>
+                                <option value="2">¿En qué ciudad naciste?</option>
+                                <option value="3">¿Cuál es tu película favorita?</option>
+                                <option value="4">¿Cuál es el apellido de tu madre?</option>
+                                <option value="5">¿Cuál fue tu primer trabajo?</option>
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="create-security-answer" class="form-label">Respuesta de Seguridad</label>
+                            <input type="text" class="form-control" id="create-security-answer" required>
+                            <small class="form-text text-muted">Se encriptará. Distingue mayúsculas</small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="create-password" class="form-label">Contraseña</label>
+                            <input type="password" class="form-control" id="create-password" required>
+                            <small class="form-text text-muted">Min. 8 caracteres con mayúscula, número y símbolo</small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="create-password-confirm" class="form-label">Confirmar Contraseña</label>
+                            <input type="password" class="form-control" id="create-password-confirm" required>
+                        </div>
+                        
+                        <div id="create-error" class="alert alert-danger d-none"></div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-success" onclick="performCreateUser()">Crear Cuenta</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL RECUPERAR CONTRASEÑA -->
+    <div class="modal fade" id="recoveryModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold"><i class="fa-solid fa-key me-2"></i>Recuperar Contraseña</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="recoveryForm">
+                        <div class="mb-3">
+                            <label for="recovery-username" class="form-label">Usuario</label>
+                            <input type="text" class="form-control" id="recovery-username" required>
+                        </div>
+                        <div id="recovery-question" class="mb-3 d-none">
+                            <label class="form-label" id="recovery-q-label"></label>
+                            <input type="text" class="form-control" id="recovery-answer" placeholder="Tu respuesta">
+                        </div>
+                        <div id="recovery-error" class="alert alert-danger d-none"></div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-warning" id="recovery-next-btn" onclick="recoveryGetQuestion()">Siguiente</button>
+                    <button type="button" class="btn btn-primary d-none" id="recovery-submit-btn" onclick="performRecovery()">Resetear Contraseña</button>
                 </div>
             </div>
         </div>
@@ -612,6 +654,7 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     
     <!-- Lógica de Frontend (Módulos ES6) -->
+    <script src="/static/js/auth.js"></script>
     <script type="module" src="/static/js/dashboard.js"></script>
 
 </body>

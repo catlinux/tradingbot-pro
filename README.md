@@ -101,22 +101,23 @@ gridbot-pro/
 
 Las siguientes funcionalidades se están preparando. Se irán activando progresivamente:
 
-- [x] **Creación Dashboard** - Página inicial del proyecto
-- [x] **Connexión exchange** - Conexión a Binance mediante API's
-- [ ] **Multi conexión** - Soporte para varios exchanges
-- [x] **Testnet** - Conexión a Testnet para pruebas
-- [ ] **Backtesting** - Cálculo de estrategias por histórico de gráficos
-- [ ] **Creación de los grids** - Formulario para colocar las estrategias
-- [ ] **Importación estrategias** - Pon a trabajar directamente las mejores estrategias creadas en backtesting
-- [ ] **Trailing up** - Si el precio sube y sobrepasa tu grid, desplaza automáticamente las órdenes para no quedar fuera de mercado
-- [ ] **Trailing Stop Loss** - Activación y optimización
-- [ ] **Take Profit dinámico** - Cálculo inteligente de objetivos
-- [ ] **Análisis técnico avanzado** - Indicadores adicionales
-- [ ] **Multi-grid simultáneo** - Operar varios pares al mismo tiempo
-- [ ] **Estrategias predefinidas** - Plantillas listas para usar
-- [ ] **Alertas por Telegram** - Notificaciones en tiempo real
-- [ ] **Exportación de reportes** - Generación de PDF con estadísticas
-- [ ] **Exportación a xls** - Crea archivos xls para leer en excel o similar.
+- :white_check_mark: **Creación Dashboard** - Página inicial del proyecto
+- :white_check_mark: **Connexión exchange** - Conexión a Binance mediante API's
+- :hourglass_flowing_sand: **Gestión usuario** - Apartado de usuario
+- :stop_button: **Multi conexión** - Soporte para varios exchanges
+- :white_check_mark: **Testnet** - Conexión a Testnet para pruebas
+- :stop_button: **Backtesting** - Cálculo de estrategias por histórico de gráficos
+- :stop_button: **Creación de los grids** - Formulario para colocar las estrategias
+- :stop_button: **Importación estrategias** - Pon a trabajar directamente las mejores estrategias creadas en backtesting
+- :stop_button: **Trailing up** - Si el precio sube y sobrepasa tu grid, desplaza automáticamente las órdenes para no quedar fuera de mercado
+- :stop_button: **Trailing Stop Loss** - Activación y optimización
+- :stop_button: **Take Profit dinámico** - Cálculo inteligente de objetivos
+- :stop_button: **Análisis técnico avanzado** - Indicadores adicionales
+- :stop_button: **Multi-grid simultáneo** - Operar varios pares al mismo tiempo
+- :stop_button: **Estrategias predefinidas** - Plantillas listas para usar
+- :stop_button: **Alertas por Telegram** - Notificaciones en tiempo real
+- :stop_button: **Exportación de reportes** - Generación de PDF con estadísticas
+- :stop_button: **Exportación a xls** - Crea archivos xls para leer en excel o similar.
 
 ## Estado de Calidad (Tests & Lint) ✅
 
@@ -128,10 +129,6 @@ Las siguientes funcionalidades se están preparando. Se irán activando progresi
   - Comando: `.venv\Scripts\python.exe -W error -m pytest -q`
 
 **Nota:** Se revisaron y añadieron logs en los bloques `except` que antes silencian errores para facilitar el diagnóstico en producción.
-
-**Captura del dashboard**
-
-![Dashboard](docs/screenshots/Dashboard.jpg)
 
 ## Ayudar al Proyecto
 

@@ -137,10 +137,17 @@ function ensureTabExists(symbol) {
     
     li.innerHTML = `
         <button class="nav-link" data-bs-toggle="tab" data-bs-target="#content-${safe}" type="button" onclick="setMode('${symbol}')">
-            <img src="${iconUrl}" class="coin-icon" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-block'">
-            <i class="fa-brands fa-bitcoin coin-fallback" style="display:none"></i>
+            <img src="${iconUrl}" class="coin-icon" id="coin-icon-${safe}">
+            <i class="fa-brands fa-bitcoin coin-fallback d-none" id="coin-fallback-${safe}"></i>
             <span>${symbol}</span>
         </button>`;
+    
+    // Agregar manejador de error para la imagen
+    const img = li.querySelector(`#coin-icon-${safe}`);
+    img.addEventListener('error', function() {
+        this.classList.add('d-none');
+        document.getElementById(`coin-fallback-${safe}`).classList.remove('d-none');
+    });
     
     tabList.appendChild(li);
 
@@ -423,7 +430,13 @@ async function loadHome() {
         if (engineBtn) engineBtn.remove(); 
         
         const isStopped = data.status === 'Stopped';
-        document.querySelectorAll('.tf-controls').forEach(el => { el.style.display = isStopped ? 'none' : 'inline-flex'; });
+        document.querySelectorAll('.tf-controls').forEach(el => { 
+            if (isStopped) {
+                el.classList.add('d-none');
+            } else {
+                el.classList.remove('d-none');
+            }
+        });
 
         updateColorValue('dash-profit-session', data.stats.session.profit, ' $');
         updateColorValue('dash-profit-total', data.stats.global.profit, ' $');

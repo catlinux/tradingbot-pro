@@ -13,6 +13,10 @@ from datetime import datetime
 from core.database import BotDatabase 
 from utils.telegram import send_msg
 from utils.logger import log
+from utils.auth import (
+    user_exists, create_user, authenticate_user, verify_session,
+    get_security_question, reset_password, invalidate_session
+)
 from dotenv import load_dotenv 
 
 app = FastAPI()
@@ -148,6 +152,22 @@ class CoinResetRequest(BaseModel):
 class BalanceAdjustRequest(BaseModel):
     asset: str    
     amount: float 
+
+# Modelos de autenticación
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+class CreateUserRequest(BaseModel):
+    username: str
+    email: str
+    security_question: int
+    security_answer: str
+    password: str
+
+class RecoveryRequest(BaseModel):
+    username: str
+    answer: str
 
 def _calculate_rsi(candles, period=14):
     try:
@@ -1001,3 +1021,163 @@ def engine_off_api():
         bot_instance.stop_logic()
         return {"status": "success", "message": "Motor de trading APAGADO."}
     return {"status": "error", "detail": "Error interno"}
+
+# ==================== ENDPOINTS DE AUTENTICACIÓN ====================
+
+@app.get("/api/auth/check-user")
+def check_user_exists():
+    """Verifica si existe un usuario en el sistema"""
+    return {"userExists": user_exists()}
+
+@app.get("/api/auth/status", name="auth_status")
+def auth_status(authorization: str = None):
+    """Obtiene el estado actual de autenticación"""
+    # Intentar obtener token del header Authorization
+    token = None
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization[7:]
+    
+    if token:
+        session = verify_session(token)
+        if session["success"]:
+            return {
+                "logged": True,
+                "username": session["username"],
+                "token": token
+            }
+    
+    return {"logged": False}
+
+@app.post("/api/auth/login")
+def login(request: LoginRequest):
+    """Login del usuario"""
+    result = authenticate_user(request.username, request.password)
+    
+    if result["success"]:
+        return {
+            "logged": True,
+            "username": result["username"],
+            "token": result["token"],
+            "message": result["message"]
+        }
+    else:
+        raise HTTPException(status_code=401, detail=result["message"])
+
+@app.post("/api/auth/create-user")
+def create_user_api(request: CreateUserRequest):
+    """Crea un nuevo usuario"""
+    # Validaciones básicas
+    if len(request.username) < 4:
+        raise HTTPException(status_code=400, detail="Username debe tener al menos 4 caracteres")
+    
+    if not request.email or "@" not in request.email:
+        raise HTTPException(status_code=400, detail="Email inválido")
+    
+    if len(request.password) < 8:
+        raise HTTPException(status_code=400, detail="Contraseña debe tener al menos 8 caracteres")
+    
+    if request.security_question not in [1, 2, 3, 4, 5]:
+        raise HTTPException(status_code=400, detail="Pregunta de seguridad inválida")
+    
+    result = create_user(
+        request.username,
+        request.email,
+        request.security_question,
+        request.security_answer,
+        request.password
+    )
+    
+    if result["success"]:
+        return {
+            "logged": True,
+            "username": result["username"],
+            "token": result["token"],
+            "message": result["message"]
+        }
+    else:
+        raise HTTPException(status_code=400, detail=result["message"])
+
+@app.get("/api/auth/security-question/{username}")
+def get_security_q(username: str):
+    """Obtiene la pregunta de seguridad para recuperación"""
+    result = get_security_question(username)
+    
+    if result["success"]:
+        return result
+    else:
+        raise HTTPException(status_code=404, detail=result.get("message", "Usuario no encontrado"))
+
+@app.post("/api/auth/reset-password")
+def reset_pwd(request: RecoveryRequest):
+    """Resetea la contraseña"""
+    result = reset_password(request.username, request.answer)
+    
+    if result["success"]:
+        return {"message": result["message"]}
+    else:
+        raise HTTPException(status_code=400, detail=result["message"])
+
+@app.post("/api/auth/logout")
+def logout(authorization: str = None):
+    """Cierra sesión"""
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization[7:]
+        invalidate_session(token)
+    
+    return {"status": "success", "message": "Sesión cerrada"}
+
+# ==================== ENDPOINTS DE EXCHANGE ====================
+
+@app.get("/api/exchange/ping")
+def exchange_ping():
+    """Obtiene el ping del exchange (Binance)"""
+    try:
+        import time
+        import requests
+        
+        # Método 1: Usar el método load_markets() que genera un ping
+        if bot_instance and bot_instance.connector and bot_instance.connector.exchange:
+            try:
+                start = time.time()
+                # publicGetPing es el endpoint de ping de Binance en CCXT
+                bot_instance.connector.exchange.publicGetPing()
+                ping_ms = int((time.time() - start) * 1000)
+                return {"ping": ping_ms, "exchange": "binance"}
+            except Exception:
+                pass
+        
+        # Método 2: Ping directo a Binance API
+        start = time.time()
+        response = requests.get("https://api.binance.com/api/v3/ping", timeout=5)
+        ping_ms = int((time.time() - start) * 1000)
+        
+        if response.status_code == 200:
+            return {"ping": ping_ms, "exchange": "binance"}
+        else:
+            return {"ping": None, "error": "Binance no responde"}
+    except Exception as e:
+        log.error(f"Error en ping: {e}")
+        return {"ping": None, "error": str(e)}
+
+@app.get("/api/exchange/info")
+def exchange_info():
+    """Obtiene información del exchange conectado"""
+    try:
+        if bot_instance and bot_instance.connector and bot_instance.connector.exchange:
+            exchange_name = bot_instance.connector.exchange.id
+            return {
+                "exchange": exchange_name.upper(),
+                "connected": True
+            }
+        else:
+            return {
+                "exchange": "Binance",
+                "connected": False
+            }
+    except Exception as e:
+        log.warn(f"Error obteniendo info del exchange: {e}")
+        return {
+            "exchange": "Binance",
+            "connected": False,
+            "error": str(e)
+        }

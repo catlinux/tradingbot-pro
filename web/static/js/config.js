@@ -236,7 +236,7 @@ export async function saveConfigForm() {
         const res = await fetch('/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: jsonString }) });
         const data = await res.json();
         
-        if(msgBox) msgBox.style.display = 'block';
+        if(msgBox) msgBox.classList.remove('d-none');
         if (res.ok) { 
             if(msgBox) {
                 msgBox.className = 'alert alert-success'; msgBox.innerHTML = '<i class="fa-solid fa-check-circle"></i> Guardado! Recargando...'; 
