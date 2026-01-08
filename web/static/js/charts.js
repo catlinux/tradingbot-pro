@@ -133,7 +133,7 @@ export function renderCandleChart(safeSym, data, gridLines, activeOrders = [], c
         return;
     }
 
-    dom.style.position = 'relative';
+    dom.classList.add('chart-position-relative');
     const colors = getThemeColors();
 
     // 1. CREACIÓN O RECUPERACIÓN DE LA INSTANCIA

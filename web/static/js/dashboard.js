@@ -17,6 +17,7 @@ let fullGlobalHistory = [];
 let sessionUptimeInterval = null; 
 let sessionUptimeBase = null; // segundos (del servidor)
 let sessionOnlineState = null; // booleano
+let tooltipInstances = {}; // Almacenar instancias de tooltips para destruirlas
 
 
 // --- EXPORTAR A WINDOW (requierido para onclick del HTML) ---
@@ -548,6 +549,7 @@ async function loadHome() {
             const elUp = document.getElementById('summary-uptime');
 
             // Si el servicio está online, mostramos uptime con formato HH:MM o DD:HH y actualizamos cada 3 minutos
+            const sessionStartTs = data.stats?.session?.start_timestamp || 0;
             if (serviceOnline && uptimeSec !== null) {
                 // Solo reiniciamos el intervalo si ha habido un cambio significativo o cambio de estado
                 const needReset = (sessionOnlineState !== true) || (sessionUptimeBase === null) || (Math.abs(uptimeSec - sessionUptimeBase) > 120);
@@ -555,6 +557,25 @@ async function loadHome() {
                     if (sessionUptimeInterval) { clearInterval(sessionUptimeInterval); sessionUptimeInterval = null; }
                     sessionUptimeBase = uptimeSec;
                     if (elUp) elUp.innerText = `Uptime: ${formatServiceUptime(sessionUptimeBase)}`;
+
+                    // Destruir tooltip anterior si existe
+                    if (tooltipInstances['summary-uptime']) {
+                        tooltipInstances['summary-uptime'].dispose();
+                        delete tooltipInstances['summary-uptime'];
+                    }
+
+                    // Añadir tooltip Bootstrap con la fecha de inicio de sesión
+                    try {
+                        if (sessionStartTs && elUp) {
+                            const d = new Date(sessionStartTs * 1000);
+                            tooltipInstances['summary-uptime'] = new bootstrap.Tooltip(elUp, {
+                                title: `Inicio sesión:<br>${d.toLocaleString()}`,
+                                placement: 'top',
+                                html: true
+                            });
+                        }
+                    } catch (e) { /* no-op */ }
+
                     // Actualizar cada 3 minutos
                     sessionUptimeInterval = setInterval(() => {
                         sessionUptimeBase += 180; // 3 minutos
@@ -565,6 +586,23 @@ async function loadHome() {
                     // Actualizamos visualmente con el valor exacto proporcionado por el servidor
                     sessionUptimeBase = uptimeSec;
                     if (elUp) elUp.innerText = `Uptime: ${formatServiceUptime(sessionUptimeBase)}`;
+                    
+                    // Destruir tooltip anterior si existe
+                    if (tooltipInstances['summary-uptime']) {
+                        tooltipInstances['summary-uptime'].dispose();
+                        delete tooltipInstances['summary-uptime'];
+                    }
+                    
+                    try {
+                        if (sessionStartTs && elUp) {
+                            const d = new Date(sessionStartTs * 1000);
+                            tooltipInstances['summary-uptime'] = new bootstrap.Tooltip(elUp, {
+                                title: `Inicio sesión:<br>${d.toLocaleString()}`,
+                                placement: 'top',
+                                html: true
+                            });
+                        }
+                    } catch (e) { /* no-op */ }
                 }
                 sessionOnlineState = true;
             } else {
@@ -579,12 +617,56 @@ async function loadHome() {
         const elBalance = document.getElementById('summary-balance');
         if (elBalance) elBalance.innerText = `${fmtUSDC(data.total_usdc_value)} US$`;
 
-        // PnL sesión (colorizado si procede)
-        updateColorValue('summary-pnl-session', data.stats?.session?.profit || 0, ' $');
+        // PnL mensual (colorizado si procede) - con tooltip
+        const pnlSession = data.stats?.session?.profit || 0;
+        updateColorValue('summary-pnl-session', pnlSession, ' $');
+        
+        // Destruir tooltip anterior de PnL mensual si existe
+        if (tooltipInstances['summary-pnl-session']) {
+            tooltipInstances['summary-pnl-session'].dispose();
+            delete tooltipInstances['summary-pnl-session'];
+        }
+        
+        // Agregar tooltip con período del mes actual
+        const elPnlSession = document.getElementById('summary-pnl-session');
+        if (elPnlSession) {
+            try {
+                const now = new Date();
+                const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+                const monthName = monthStart.toLocaleString('es-ES', { month: 'long', year: 'numeric' });
+                const tooltipText = `Período mensual:<br>${monthName}<br>${monthStart.toLocaleString()}`;
+                tooltipInstances['summary-pnl-session'] = new bootstrap.Tooltip(elPnlSession, {
+                    title: tooltipText,
+                    placement: 'top',
+                    html: true
+                });
+            } catch (e) { /* no-op */ }
+        }
 
-        // PnL grid (suma de strategies) - usar updateColorValue para colorear según signo
-        const totalGridPnl = (data.strategies || []).reduce((acc, s) => acc + (s.total_pnl || 0), 0);
-        updateColorValue('summary-pnl-grid', totalGridPnl, ' $');
+        // PnL total (desde la creación del bot) - usar updateColorValue para colorear según signo
+        const pnlTotal = data.stats?.global?.profit || 0;
+        updateColorValue('summary-pnl-grid', pnlTotal, ' $');
+        
+        // Destruir tooltip anterior de PnL total si existe
+        if (tooltipInstances['summary-pnl-grid']) {
+            tooltipInstances['summary-pnl-grid'].dispose();
+            delete tooltipInstances['summary-pnl-grid'];
+        }
+        
+        // Añadir tooltip con fecha de creación del bot
+        const firstRunTs = data.stats?.global?.first_run_timestamp || 0;
+        const elPnlTotal = document.getElementById('summary-pnl-grid');
+        if (elPnlTotal && firstRunTs) {
+            try {
+                const d = new Date(firstRunTs * 1000);
+                const tooltipText = `Primer arranque:<br>${d.toLocaleString()}`;
+                tooltipInstances['summary-pnl-grid'] = new bootstrap.Tooltip(elPnlTotal, {
+                    title: tooltipText,
+                    placement: 'top',
+                    html: true
+                });
+            } catch (e) { /* no-op */ }
+        }
 
         // Operaciones totales (suma de trades de todas las estrategias)
         const totalOperations = (data.strategies || []).reduce((acc, s) => acc + (s.total_trades || 0), 0);

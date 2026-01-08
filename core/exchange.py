@@ -3,11 +3,11 @@ import ccxt
 import os
 import json5
 import time
-from dotenv import load_dotenv
 from utils.logger import log
+from core.database import BotDatabase
 
-# Cargamos .env (override=True permite recargar si cambia)
-load_dotenv(dotenv_path='config/.env', override=True)
+# Nota: no cargamos variables de exchange desde .env aquí para evitar intentos de conexión automáticos.
+# Las credenciales deben gestionarse exclusivamente desde la base de datos y el Dashboard.
 
 class BinanceConnector:
     def __init__(self):
@@ -45,15 +45,15 @@ class BinanceConnector:
                     new_testnet = new_config.get('system', {}).get('use_testnet', True)
 
                     self.config = new_config
-
-                    if old_testnet != new_testnet or self.exchange is None:
-                        log.warning(f"🔄 RECONFIGURACIÓN DE RED: {'TESTNET' if new_testnet else 'REAL'}. Conectando...")
-                        self._connect()
-                        try:
-                            if self.exchange:
-                                self.exchange.load_markets()
-                        except Exception as e:
-                            log.debug(f"load_markets failed during config reload: {e}")
+                    # Solo reconectar si hay cambios significativos de red y tenemos exchange activo
+                    if (old_testnet != new_testnet) and self.exchange:
+                         log.warning(f"🔄 RECONFIGURACIÓN DE RED: {'TESTNET' if new_testnet else 'REAL'}. Conectando...")
+                         self._connect()
+                         try:
+                             if self.exchange:
+                                 self.exchange.load_markets()
+                         except Exception as e:
+                             log.debug(f"load_markets failed during config reload: {e}")
 
                     return True
         except Exception as e:
@@ -61,50 +61,47 @@ class BinanceConnector:
         return False
 
     def _connect(self):
-        load_dotenv(dotenv_path='config/.env', override=True)
-        
-        use_testnet = self.config.get('system', {}).get('use_testnet', True)
-
-        if use_testnet:
-            api_key = os.getenv('BINANCE_API_KEY_TEST')
-            secret_key = os.getenv('BINANCE_SECRET_KEY_TEST')
-            log.info("📡 Intentando conectar a BINANCE TESTNET...")
-        else:
-            api_key = os.getenv('BINANCE_API_KEY_REAL')
-            secret_key = os.getenv('BINANCE_SECRET_KEY_REAL')
-            log.warning("🚨 Intentando conectar a BINANCE REAL (DINERO REAL) 🚨")
-
-        if not api_key or not secret_key:
-            log.error(f"❌ FALTAN CLAVES para modo {'TESTNET' if use_testnet else 'REAL'}.")
-            self.exchange = None
-            return
-
+        """Intenta conectar usando credenciales de la base de datos (prioridad)"""
         try:
-            # CONFIGURACIÓN MEJORADA PARA EVITAR ERRORES DE CONEXIÓN Y TIMESTAMPS
-            self.exchange = ccxt.binance({
-                'apiKey': api_key,
-                'secret': secret_key,
-                'enableRateLimit': True, 
-                'timeout': 30000, # 30 segundos de timeout (evita colgarse)
-                'options': { 
-                    'defaultType': 'spot', 
-                    'adjustForTimeDifference': True, # Sincroniza reloj automáticamente
-                    'recvWindow': 60000              # Margen de 60s por latencia de red
-                }
-            })
-
-            if use_testnet:
-                self.exchange.set_sandbox_mode(True)
+            db = BotDatabase()
+            exchanges = db.get_exchanges()
             
-            # Verificación rápida sin bloquear (timeout corto)
-            try:
-                self.exchange.fetch_time()
-                log.success(f"✅ Conexión EXITOSA con Binance ({'TESTNET' if use_testnet else 'REAL'}).")
-            except Exception as timeout_err:
-                log.warning(f"⚠️  Conexión establecida pero verificación lenta: {timeout_err}")
-
+            # Buscar el primer exchange marcado como activo
+            active_exchange = next((e for e in exchanges if e.get('is_active')), None)
+            
+            if active_exchange:
+                name = active_exchange['name']
+                use_testnet = active_exchange['use_testnet']
+                log.info(f"📡 Cargando credenciales para exchange activo: {name} (Testnet: {use_testnet})")
+                
+                creds = db.get_exchange_credentials(name)
+                if creds and creds.get('success'):
+                    api_key = creds.get('api_key')
+                    secret_key = creds.get('secret_key')
+                    passphrase = creds.get('passphrase')
+                    
+                    if api_key and secret_key:
+                        self.connect_with_credentials(
+                            api_key=api_key,
+                            secret_key=secret_key,
+                            passphrase=passphrase,
+                            use_testnet=use_testnet,
+                            exchange_type=active_exchange.get('type', 'binance')
+                        )
+                        return
+                    else:
+                        log.error(f"❌ Credenciales vacías para exchange {name}.")
+                else:
+                    log.error(f"❌ Error recuperando credenciales para exchange {name}.")
+            else:
+                log.warning("⚠️ No hay ningún exchange activo configurado en la base de datos.")
+                
+            # Si llegamos aquí, no nos hemos conectado
+            self.exchange = None
+            log.info("ℹ️ El bot inicia en modo DESCONECTADO. Configura un exchange en el Dashboard.")
+            
         except Exception as e:
-            log.error(f"❌ Error de conexión CRÍTICO: {e}")
+            log.error(f"❌ Error crítico en _connect: {e}")
             self.exchange = None
 
     def _load_markets_background(self):
@@ -128,6 +125,93 @@ class BinanceConnector:
         except Exception as e:
             log.debug(f"validate_connection failed: {e}")
             return False
+
+    def connect_with_credentials(self, api_key: str, secret_key: str, passphrase: str = None, use_testnet: bool = None, exchange_type: str = 'binance'):
+        """Conecta el conector usando credenciales proporcionadas (no lee .env).
+        Soporta 'binance' y 'bitget' (básico) actualmente."""
+        try:
+            if use_testnet is None:
+                use_testnet = self.config.get('system', {}).get('use_testnet', True)
+
+            if not api_key or not secret_key:
+                log.error("❌ Faltan claves para conectar con credenciales proporcionadas.")
+                self.exchange = None
+                return False, "Faltan claves"
+
+            # Construir objeto de exchange según tipo
+            if exchange_type == 'bitget':
+                opts = {'apiKey': api_key, 'secret': secret_key, 'password': passphrase or '', 'enableRateLimit': True, 'timeout': 30000}
+                self.exchange = ccxt.bitget(opts)
+            else:  # por defecto, Binance
+                self.exchange = ccxt.binance({
+                    'apiKey': api_key,
+                    'secret': secret_key,
+                    'enableRateLimit': True,
+                    'timeout': 30000,
+                    'options': {
+                        'defaultType': 'spot',
+                        'adjustForTimeDifference': True,
+                        'recvWindow': 60000
+                    }
+                })
+
+            if use_testnet and exchange_type == 'binance':
+                try:
+                    self.exchange.set_sandbox_mode(True)
+                except Exception:
+                    pass
+                
+                # ACTUALIZACIÓN SEGURA DE URLS PARA NO BORRAR OTROS ENDPOINTS
+                try:
+                    # Aseguramos que existe el dict 'api'
+                    if 'api' not in self.exchange.urls:
+                         self.exchange.urls['api'] = {}
+                    
+                    # Actualizamos URLs de Spot (API v3)
+                    self.exchange.urls['api']['public'] = 'https://testnet.binance.vision/api/v3'
+                    self.exchange.urls['api']['private'] = 'https://testnet.binance.vision/api/v3'
+                    
+                    # Actualizamos URLs de Futures (FAPI v1) para evitar errores de claves faltantes
+                    self.exchange.urls['api']['fapiPublic'] = 'https://testnet.binancefuture.com/fapi/v1'
+                    self.exchange.urls['api']['fapiPrivate'] = 'https://testnet.binancefuture.com/fapi/v1'
+                except Exception as e:
+                    log.warning(f"Error actualizando URLs Testnet: {e}")
+
+            # Verificación no bloqueante con timeout
+            try:
+                import threading
+                _fetch_result = [None]
+                def _attempt_fetch_time():
+                    try:
+                        self.exchange.fetch_time()
+                        _fetch_result[0] = True
+                    except Exception as e:
+                        _fetch_result[0] = e
+                _t = threading.Thread(target=_attempt_fetch_time, daemon=True)
+                _t.start()
+                _t.join(timeout=3)
+                if _t.is_alive():
+                    log.warning("⚠️ Verificación de tiempo del exchange lenta (timeout 3s). Continuando sin bloquear.")
+                elif isinstance(_fetch_result[0], Exception):
+                    log.warning(f"⚠️ Conexión establecida pero verificación falló: {_fetch_result[0]}")
+                else:
+                    log.success("✅ Conexión EXITOSA con exchange vía credenciales." )
+            except Exception as v_e:
+                log.warning(f"⚠️ Error durante verificación de conexión: {v_e}")
+
+            # Lanzar carga de mercados en background
+            try:
+                import threading
+                threading.Thread(target=self._load_markets_background, daemon=True).start()
+            except Exception:
+                pass
+
+            return True, "Conectado"
+
+        except Exception as e:
+            log.error(f"❌ Error conectando con credenciales: {e}")
+            self.exchange = None
+            return False, str(e)
 
     # --- GESTOR DE ERRORES CENTRALIZADO ---
     def _handle_api_error(self, e, context=""):

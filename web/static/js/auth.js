@@ -84,6 +84,7 @@ function updateAuthUI(userExistsParam = null) {
     const btnCreateUser = document.getElementById('btn-create-user');
     const btnRecovery = document.getElementById('btn-recovery');
     const authLogged = document.getElementById('auth-logged');
+    const disconnectedLabel = document.getElementById('disconnected-label');
     const loggedUsername = document.getElementById('logged-username');
     const configUsername = document.getElementById('config-username');
     const configEmail = document.getElementById('config-email');
@@ -98,6 +99,7 @@ function updateAuthUI(userExistsParam = null) {
         if (btnCreateUser) btnCreateUser.classList.add('d-none');
         if (btnRecovery) btnRecovery.classList.add('d-none');
         if (authLogged) authLogged.classList.add('active');
+        if (disconnectedLabel) disconnectedLabel.classList.add('d-none');
         if (loggedUsername) loggedUsername.textContent = authState.username;
         
         // Actualizar tarjeta de usuario
@@ -109,7 +111,8 @@ function updateAuthUI(userExistsParam = null) {
         }
         if (configLoginStatus) {
             configLoginStatus.textContent = 'Sesión activa';
-            configLoginStatus.style.color = '#16a34a';
+            configLoginStatus.classList.remove('status-warning', 'status-inactive');
+            configLoginStatus.classList.add('status-active');
         }
         
         // Mostrar todas las pestañas
@@ -117,6 +120,7 @@ function updateAuthUI(userExistsParam = null) {
     } else {
         // Usuario no logueado
         if (authLogged) authLogged.classList.remove('active');
+        if (disconnectedLabel) disconnectedLabel.classList.remove('d-none');
         
         if (userExists) {
             // Usuario existe pero no está logueado: mostrar banner
@@ -135,7 +139,8 @@ function updateAuthUI(userExistsParam = null) {
             if (configEmail) configEmail.textContent = '--';
             if (configLoginStatus) {
                 configLoginStatus.textContent = 'No logueado';
-                configLoginStatus.style.color = '#f59e0b';
+                configLoginStatus.classList.remove('status-active', 'status-inactive');
+                configLoginStatus.classList.add('status-warning');
             }
         } else {
             // No existe usuario - mostrar crear y banner
@@ -152,7 +157,8 @@ function updateAuthUI(userExistsParam = null) {
             if (configEmail) configEmail.textContent = '--';
             if (configLoginStatus) {
                 configLoginStatus.textContent = '--';
-                configLoginStatus.style.color = '#6b7280';
+                configLoginStatus.classList.remove('status-active', 'status-warning');
+                configLoginStatus.classList.add('status-inactive');
             }
         }
         
@@ -171,7 +177,31 @@ function updateAuthUI(userExistsParam = null) {
     if (exchangeCard) {
         updateExchangeName();
     }
-}
+
+    // Controla estado habilitado del selector de exchange según login
+    const exchangeSelect = document.getElementById('exchange-select');
+    if (exchangeSelect) {
+        // Deshabilitar el control si no hay sesión activa
+        exchangeSelect.disabled = !authState.isLogged;
+        if (!authState.isLogged) {
+            exchangeSelect.setAttribute('aria-disabled', 'true');
+            exchangeSelect.classList.add('select-disabled-by-auth');
+        } else {
+            exchangeSelect.removeAttribute('aria-disabled');
+            exchangeSelect.classList.remove('select-disabled-by-auth');
+            // Si está logueado, cargar la lista de exchanges
+            if (typeof initializeExchanges === 'function') {
+                initializeExchanges();
+            }
+        }
+    }
+    
+    // Controlar visibilidad del botón "Añade tu exchange"
+    const btnAddExchange = document.getElementById('btn-add-exchange');
+    if (btnAddExchange) {
+        btnAddExchange.disabled = !authState.isLogged;
+    }
+} 
 
 /**
  * Actualiza el banner de autenticación con mensajes dinámicos
@@ -184,12 +214,12 @@ function updateAuthBanner(show = true, bannerType = 'user-not-logged') {
     
     if (!show) {
         // Ocultar banner
-        banner.style.display = 'none';
+        banner.classList.remove('visible');
         return;
     }
     
     // Mostrar banner con mensaje correspondiente
-    banner.style.display = 'flex';
+    banner.classList.add('visible');
     
     if (bannerType === 'no-user') {
         bannerText.innerHTML = '<strong>⚙️ Configuración requerida:</strong> No hay usuario creado. Para acceder a todas las funciones de GridBot Pro, necesitas crear una cuenta. Haz clic en el botón <strong>"Crear Usuario"</strong> para comenzar.';
@@ -309,6 +339,89 @@ function openRecoveryModal() {
     document.getElementById('recovery-next-btn').classList.remove('d-none');
     document.getElementById('recovery-submit-btn').classList.add('d-none');
     modal.show();
+}
+
+/**
+ * Abre modal de cambiar contraseña
+ */
+function openChangePasswordModal() {
+    const modal = new bootstrap.Modal(document.getElementById('changePasswordModal'));
+    document.getElementById('change-password-error').classList.add('d-none');
+    document.getElementById('changePasswordForm').reset();
+    modal.show();
+}
+
+/**
+ * Realiza el cambio de contraseña
+ */
+async function performChangePassword() {
+    const currentPassword = document.getElementById('current-password').value;
+    const newPassword = document.getElementById('new-password').value;
+    const newPasswordConfirm = document.getElementById('new-password-confirm').value;
+    const errorDiv = document.getElementById('change-password-error');
+    
+    // Validaciones
+    if (!currentPassword || !newPassword || !newPasswordConfirm) {
+        errorDiv.textContent = 'Completa todos los campos';
+        errorDiv.classList.remove('d-none');
+        return;
+    }
+    
+    if (newPassword !== newPasswordConfirm) {
+        errorDiv.textContent = 'Las nuevas contraseñas no coinciden';
+        errorDiv.classList.remove('d-none');
+        return;
+    }
+    
+    if (newPassword.length < 6) {
+        errorDiv.textContent = 'La contraseña debe tener al menos 6 caracteres';
+        errorDiv.classList.remove('d-none');
+        return;
+    }
+    
+    try {
+        const token = sessionStorage.getItem('auth_token');
+        const response = await fetch('/api/auth/change-password', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                current_password: currentPassword,
+                new_password: newPassword
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            errorDiv.textContent = data.detail || 'Error al cambiar la contraseña';
+            errorDiv.classList.remove('d-none');
+            return;
+        }
+        
+        // Éxito
+        await Swal.fire({
+            title: 'Éxito',
+            text: 'Contraseña cambida correctamente',
+            icon: 'success',
+            confirmButtonText: 'Aceptar'
+        });
+        
+        // Cerrar modal
+        const modal = bootstrap.Modal.getInstance(document.getElementById('changePasswordModal'));
+        if (modal) modal.hide();
+        
+        // Limpiar formulario
+        document.getElementById('changePasswordForm').reset();
+        errorDiv.classList.add('d-none');
+        
+    } catch (error) {
+        console.error('Error:', error);
+        errorDiv.textContent = 'Error de conexión: ' + error.message;
+        errorDiv.classList.remove('d-none');
+    }
 }
 
 /**

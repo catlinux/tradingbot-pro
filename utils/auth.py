@@ -304,5 +304,28 @@ def invalidate_session(token: str):
     except Exception as e:
         log.error(f"Error invalidando sesión: {e}")
 
-# Inicializar BD al importar
-init_auth_db()
+def update_password(username: str, new_password: str) -> dict:
+    """Actualiza la contraseña de un usuario"""
+    try:
+        conn = sqlite3.connect(AUTH_DB)
+        cursor = conn.cursor()
+        
+        # Verificar que el usuario existe
+        cursor.execute('SELECT id FROM users WHERE username = ?', (username,))
+        user = cursor.fetchone()
+        
+        if not user:
+            conn.close()
+            return {"success": False, "message": "Usuario no encontrado"}
+        
+        # Actualizar contraseña
+        password_hash = hash_password(new_password)
+        cursor.execute('UPDATE users SET password_hash = ? WHERE username = ?', (password_hash, username))
+        conn.commit()
+        conn.close()
+        
+        return {"success": True, "message": "Contraseña actualizada correctamente"}
+    except Exception as e:
+        log.error(f"Error actualizando contraseña: {e}")
+        return {"success": False, "message": f"Error: {str(e)}"}
+

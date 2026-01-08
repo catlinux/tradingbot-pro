@@ -8,3 +8,5 @@ pandas
 jinja2
 requests
 watchdog>=2.1.0
+python-multipart
+cryptography

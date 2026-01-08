@@ -1,5 +1,5 @@
 # Archivo: gridbot_binance/web/server.py
-from fastapi import FastAPI, Request, HTTPException, Header
+from fastapi import FastAPI, Request, HTTPException, Header, Form
 from fastapi.staticfiles import StaticFiles 
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
@@ -13,6 +13,8 @@ from datetime import datetime
 from core.database import BotDatabase 
 from utils.telegram import send_msg
 from utils.logger import log
+import ccxt
+import threading
 from utils.auth import (
     user_exists, create_user, authenticate_user, verify_session,
     get_security_question, reset_password, invalidate_session
@@ -168,6 +170,10 @@ class CreateUserRequest(BaseModel):
 class RecoveryRequest(BaseModel):
     username: str
     answer: str
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
 
 def _calculate_rsi(candles, period=14):
     try:
@@ -355,13 +361,17 @@ def get_status():
             holding_values[f"{asset}/USDT"] = qtyf * price  # redundante pero útil para búsqueda
 
 
-        # 1. Obtenim estadístiques de la SESSIÓ ACTUAL
-        session_start_ts = bot_instance.global_start_time
-        session_stats = db.get_stats(from_timestamp=session_start_ts)
-        session_cash_flow = session_stats['per_coin_stats']['cash_flow']
+        # 1. Calcular PnL MENSUAL (desde el día 1 del mes actual)
+        now = datetime.now()
+        monthly_start_ts = datetime(now.year, now.month, 1).timestamp()
+        monthly_stats = db.get_stats(from_timestamp=monthly_start_ts)
+        monthly_cash_flow = monthly_stats['per_coin_stats']['cash_flow']
         
         # 2. Obtenim estadístiques GLOBALS
         global_trades_stats = db.get_stats(from_timestamp=0) 
+        
+        # 3. Obtenim estadístiques de la SESSIÓ ACTUAL (per a uptime)
+        session_start_ts = bot_instance.global_start_time
         
         # Calculamos uptime de sesión (si no hay session_start, usamos el arranque del servidor web como fallback)
         if session_start_ts:
@@ -379,7 +389,7 @@ def get_status():
 
         strategies_data = []
         acc_global_pnl = 0.0
-        acc_session_pnl = 0.0
+        acc_monthly_pnl = 0.0
 
         for symbol in pairs_to_check:
             try:
@@ -394,18 +404,18 @@ def get_status():
                 curr_price = current_prices_map.get(symbol, 0.0)
                 curr_val = holding_values.get(symbol, 0.0)
                 
-                # --- CÀLCUL PNL SESSIÓ ---
-                cf_session = session_cash_flow.get(symbol, 0.0)
-                qty_delta = session_stats['per_coin_stats']['qty_delta'].get(symbol, 0.0)
-                strat_pnl_session = (qty_delta * curr_price) + cf_session
+                # --- CÀLCUL PNL MENSUAL ---
+                cf_monthly = monthly_cash_flow.get(symbol, 0.0)
+                qty_delta = monthly_stats['per_coin_stats']['qty_delta'].get(symbol, 0.0)
+                strat_pnl_monthly = (qty_delta * curr_price) + cf_monthly
 
                 # --- CÀLCUL PNL GLOBAL (SISTEMA CAIXA REGISTRADORA) ---
                 accumulated_history = db.get_accumulated_pnl(symbol)
-                strat_pnl_global = accumulated_history + strat_pnl_session
+                strat_pnl_global = accumulated_history + strat_pnl_monthly
                 # -------------------------
 
                 acc_global_pnl += strat_pnl_global
-                acc_session_pnl += strat_pnl_session
+                acc_monthly_pnl += strat_pnl_monthly
 
                 if is_enabled or trades_count > 0 or curr_val > 1.0:
                     strategies_data.append({
@@ -416,7 +426,7 @@ def get_status():
                         "spread": strat_conf.get('grid_spread', '-'),
                         "total_trades": trades_count,
                         "total_pnl": round(strat_pnl_global, 2),  
-                        "session_pnl": round(strat_pnl_session, 2)
+                        "session_pnl": round(strat_pnl_monthly, 2)
                     })
             except Exception as e:
                 log.error(f"Error procesando stats {symbol}: {e}")
@@ -429,23 +439,25 @@ def get_status():
             "total_usdc_value": round(current_total_equity, 2),
             "wallet_total_usdc": round(current_total_equity, 2),
             "portfolio_distribution": portfolio,
-            "session_trades_distribution": session_stats['trades_distribution'],
+            "session_trades_distribution": monthly_stats['trades_distribution'],
             "global_trades_distribution": global_trades_stats['trades_distribution'],
             "strategies": strategies_data,
             "stats": {
                 "session": {
-                    "trades": session_stats['trades'],
-                    "profit": round(acc_session_pnl, 2),
-                    "best_coin": session_stats['best_coin'],
+                    "trades": monthly_stats['trades'],
+                    "profit": round(acc_monthly_pnl, 2),
+                    "best_coin": monthly_stats['best_coin'],
                     "uptime": session_uptime_str,
-                    "uptime_seconds": session_uptime_seconds
+                    "uptime_seconds": session_uptime_seconds,
+                    "start_timestamp": int(session_start_ts) if session_start_ts else 0
                 },
                 "global": {
                     "trades": global_trades_stats['trades'],
                     "profit": round(acc_global_pnl, 2),
                     "best_coin": global_trades_stats['best_coin'],
                     "uptime": total_uptime_str,
-                    "uptime_seconds": total_uptime_seconds
+                    "uptime_seconds": total_uptime_seconds,
+                    "first_run_timestamp": int(first_run_ts) if first_run_ts else 0
                 }
             }
         }
@@ -1126,14 +1138,300 @@ def reset_pwd(request: RecoveryRequest):
     else:
         raise HTTPException(status_code=400, detail=result["message"])
 
+@app.post("/api/auth/change-password")
+def change_password(request: ChangePasswordRequest, authorization: str = Header(None)):
+    """Cambia la contraseña del usuario logueado"""
+    from utils.auth import verify_session, update_password
+    
+    # Verificar token
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Token no proporcionado")
+    
+    token = authorization[7:]
+    session_data = verify_session(token)
+    
+    if not session_data or not session_data.get("success"):
+        raise HTTPException(status_code=401, detail="Sesión inválida")
+    
+    username = session_data.get("username")
+    
+    # Verificar contraseña actual
+    auth_result = authenticate_user(username, request.current_password)
+    if not auth_result.get("success"):
+        raise HTTPException(status_code=401, detail="Contraseña actual incorrecta")
+    
+    # Cambiar contraseña
+    result = update_password(username, request.new_password)
+    if result.get("success"):
+        return {"message": "Contraseña cambida correctamente"}
+    else:
+        raise HTTPException(status_code=400, detail=result.get("message", "Error al cambiar la contraseña"))
+
 @app.post("/api/auth/logout")
-def logout(authorization: str = None):
+def logout(authorization: str = Header(None)):
     """Cierra sesión"""
     if authorization and authorization.startswith("Bearer "):
         token = authorization[7:]
         invalidate_session(token)
     
     return {"status": "success", "message": "Sesión cerrada"}
+
+# ==================== ENDPOINTS DE EXCHANGES MANAGEMENT ====================
+
+@app.get("/api/exchanges/list")
+def get_exchanges_list():
+    """Obtiene lista de exchanges configurados"""
+    try:
+        exchanges = db.get_exchanges()
+        return {"success": True, "exchanges": exchanges}
+    except Exception as e:
+        log.error(f"Error obteniendo exchanges: {e}")
+        return {"success": False, "exchanges": []}
+
+@app.post("/api/exchanges/save")
+def save_exchange_config(
+    exchange_name: str = Form(...),
+    api_key: str = Form(...),
+    secret_key: str = Form(...),
+    passphrase: str = Form(default=None),
+    use_testnet: int = Form(default=0)
+):
+    """Guarda o actualiza configuración de un exchange"""
+    try:
+        log.info(f"Guardando exchange: {exchange_name}, use_testnet={bool(int(use_testnet))}, type={'bitget' if exchange_name.lower()=='bitget' else 'binance'}")
+        result = db.save_exchange(exchange_name, api_key, secret_key, passphrase, use_testnet=bool(int(use_testnet)))
+        log.debug(f"Resultado save_exchange: {result}")
+        if not result["success"]:
+            raise HTTPException(status_code=400, detail=result["message"])
+
+        # Intentamos validación rápida (no bloqueante excesivo)
+        validation = {"validated": False, "message": None}
+        try:
+            # Crear instancia ccxt temporal según tipo (binance/bitget)
+            exchange_type = 'binance' if exchange_name.lower() != 'bitget' else 'bitget'
+            if exchange_type == 'bitget':
+                # Añadimos timeout y opciones para evitar timeouts por defecto y mejorar fiabilidad
+                temp_ex = ccxt.bitget({ 'apiKey': api_key, 'secret': secret_key, 'password': passphrase or '' , 'enableRateLimit': True, 'timeout': 30000, 'options': {'adjustForTimeDifference': True} })
+            else:
+                temp_ex = ccxt.binance({ 'apiKey': api_key, 'secret': secret_key, 'enableRateLimit': True, 'options': {'defaultType': 'spot'} })
+
+            # Si es Binance y pide Testnet, ajustamos sólo las URLs necesarias
+            if exchange_type == 'binance' and bool(int(use_testnet)):
+                try:
+                    temp_ex.set_sandbox_mode(True)
+                except Exception:
+                    pass
+                try:
+                    if 'api' not in temp_ex.urls:
+                        temp_ex.urls['api'] = {}
+                    temp_ex.urls['api']['public'] = 'https://testnet.binance.vision/api/v3'
+                    temp_ex.urls['api']['private'] = 'https://testnet.binance.vision/api/v3'
+                    temp_ex.urls['api']['fapiPublic'] = 'https://testnet.binancefuture.com/fapi/v1'
+                    temp_ex.urls['api']['fapiPrivate'] = 'https://testnet.binancefuture.com/fapi/v1'
+                except Exception as e:
+                    log.warning(f"Error actualizando URLs Testnet temporal: {e}")
+
+            # Verificación independiente del tipo de exchange (Binance o Bitget)
+            _res = [None]
+            def _try_fetch():
+                try:
+                    errors = []
+                    # 1) Verificación pública y ligera: fetch_time
+                    try:
+                        temp_ex.fetch_time()
+                        _res[0] = (True, 'OK - fetch_time')
+                        return
+                    except Exception as e_public:
+                        errors.append(f"time: {e_public}")
+
+                    # 2) Intento autenticado: fetch_balance
+                    try:
+                        temp_ex.fetch_balance()
+                        _res[0] = (True, 'OK - fetch_balance')
+                        return
+                    except Exception as e_auth:
+                        errors.append(f"balance: {e_auth}")
+
+                    # 3) Intentos de respaldo públicos: fetch_markets / fetch_tickers
+                    try:
+                        temp_ex.fetch_markets()
+                        _res[0] = (True, 'OK - fetch_markets')
+                        return
+                    except Exception as e_markets:
+                        errors.append(f"markets: {e_markets}")
+
+                    try:
+                        temp_ex.fetch_tickers()
+                        _res[0] = (True, 'OK - fetch_tickers')
+                        return
+                    except Exception as e_tickers:
+                        errors.append(f"tickers: {e_tickers}")
+
+                    # Ninguna comprobación funcionó
+                    _res[0] = (False, "; ".join(errors))
+                except Exception as e_thread:
+                    # Capturar errores inesperados dentro del thread
+                    _res[0] = (False, f"thread-exception: {e_thread}")
+                    log.error(f"Exception inside validation thread: {e_thread}")
+            t = threading.Thread(target=_try_fetch, daemon=True)
+            log.debug("Iniciando hilo de validación de exchange (timeout 4s)")
+            t.start()
+            t.join(timeout=4)
+            log.debug(f"Hilo terminó/timeout; _res={_res[0]}")
+            if t.is_alive() or _res[0] is None:
+                validation['validated'] = False
+                validation['message'] = 'Validación: timeout o sin respuesta del exchange.'
+                log.warning(f"Exchange validation: timeout or no response. _res={_res[0]}")
+            else:
+                validation['validated'] = _res[0][0]
+                # Asegurar que siempre devolvemos un mensaje legible
+                raw_msg = _res[0][1]
+                if raw_msg is None or (isinstance(raw_msg, str) and raw_msg.strip() == ''):
+                    if validation['validated']:
+                        validation['message'] = 'OK'
+                    else:
+                        validation['message'] = 'Validación: fallo sin detalles. Revisa los logs del servidor.'
+                else:
+                    validation['message'] = raw_msg
+                log.debug(f"Exchange validation result: validated={validation['validated']}, message={validation['message']}")
+        except Exception as e:
+            validation['validated'] = False
+            validation['message'] = str(e)
+            log.error(f"Exception during validation setup: {e}")
+
+        # Construir respuesta final y asegurar mensaje no-nulo
+        resp = {"success": True}
+        # Preferir mensaje de validación, si existe; sino, usar mensaje del save; si no, 'Sin detalles'
+        final_message = validation.get('message') or result.get('message') or 'Sin detalles'
+        resp['message'] = final_message
+        resp['validated'] = validation.get('validated', False)
+        log.debug(f"/api/exchanges/save response: {resp}")
+        return resp
+    except Exception as e:
+        log.error(f"Error guardando exchange: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/exchanges/get/{exchange_name}")
+def get_exchange_config(exchange_name: str):
+    """Obtiene credenciales de un exchange"""
+    try:
+        result = db.get_exchange_credentials(exchange_name)
+        if result.get("success"):
+            return result
+        else:
+            raise HTTPException(status_code=404, detail=result["message"])
+    except Exception as e:
+        log.error(f"Error obteniendo credenciales: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/exchanges/delete/{exchange_name}")
+def delete_exchange_config(exchange_name: str):
+    """Elimina configuración de un exchange"""
+    try:
+        result = db.delete_exchange(exchange_name)
+        if result["success"]:
+            return {"success": True, "message": result["message"]}
+        else:
+            raise HTTPException(status_code=400, detail=result["message"])
+    except Exception as e:
+        log.error(f"Error eliminando exchange: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/exchanges/connect/{exchange_name}")
+def connect_exchange(exchange_name: str):
+    """Conecta el servicio al exchange con las credenciales guardadas"""
+    try:
+        creds = db.get_exchange_credentials(exchange_name)
+        if not creds.get('success'):
+            raise HTTPException(status_code=404, detail='Exchange no encontrado')
+
+        api_key = creds.get('api_key')
+        secret_key = creds.get('secret_key')
+        passphrase = creds.get('passphrase')
+
+        # Determinar tipo de exchange (binance/bitget) si está en BD
+        exchange_type = 'binance'
+        try:
+            exchs = db.get_exchanges()
+            for e in exchs:
+                if e.get('name', '').lower() == exchange_name.lower():
+                    exchange_type = e.get('type', 'binance')
+                    break
+        except Exception:
+            pass
+
+        if not bot_instance or not bot_instance.connector:
+            raise HTTPException(status_code=500, detail='Bot no inicializado')
+
+        # Intentamos conectar con las credenciales
+        use_testnet_flag = bool(creds.get('use_testnet', False))
+        log.info(f"Conectando a {exchange_name} (type={exchange_type}, testnet={use_testnet_flag})")
+        ok, msg = bot_instance.connector.connect_with_credentials(api_key, secret_key, passphrase, use_testnet=use_testnet_flag, exchange_type=exchange_type)
+        if not ok:
+            raise HTTPException(status_code=400, detail=f'No se pudo conectar: {msg}')
+        # Guardar exchange activo en memoria del bot
+        try:
+            bot_instance.active_exchange_name = exchange_name
+        except Exception:
+            pass
+
+        # Invalidar cachés para forzar actualización inmediata
+        global _balance_cache, _tickers_cache
+        _balance_cache = {"data": {}, "timestamp": 0}
+        _tickers_cache = {"data": {}, "timestamp": 0}
+
+        return {"success": True, "message": f"Conectado a {exchange_name}", "connected": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error(f"Error conectando exchange: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/exchanges/disconnect")
+def disconnect_exchange():
+    """Desconecta el exchange actual"""
+    try:
+        if bot_instance and bot_instance.connector:
+            bot_instance.connector.exchange = None
+            try:
+                bot_instance.active_exchange_name = None
+            except Exception:
+                pass
+
+            global _balance_cache, _tickers_cache
+            _balance_cache = {"data": {}, "timestamp": 0}
+            _tickers_cache = {"data": {}, "timestamp": 0}
+
+            return {"success": True, "message": "Exchange desconectado"}
+        return {"success": False, "message": "No había exchange conectado"}
+    except Exception as e:
+        log.error(f"Error desconectando exchange: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/exchanges/keys_hash/{exchange_name}")
+def get_exchange_keys_hash(exchange_name: str):
+    """Devuelve hashes SHA256 de api_key y secret_key guardados (NO expone claves en claro)."""
+    try:
+        result = db.get_exchange_credentials(exchange_name)
+        if not result.get('success'):
+            raise HTTPException(status_code=404, detail='Exchange no encontrado')
+
+        import hashlib
+        api_key = result.get('api_key') or ''
+        secret_key = result.get('secret_key') or ''
+
+        api_hash = hashlib.sha256(api_key.encode()).hexdigest() if api_key else None
+        secret_hash = hashlib.sha256(secret_key.encode()).hexdigest() if secret_key else None
+
+        return {"success": True, "api_hash": api_hash, "secret_hash": secret_hash}
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error(f"Error obteniendo hashes de claves: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ==================== ENDPOINTS DE EXCHANGE ====================
 

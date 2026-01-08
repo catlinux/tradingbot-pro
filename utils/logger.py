@@ -35,6 +35,11 @@ class BotLogger:
         # Éxito (Verde)
         print(f"{Fore.LIGHTBLACK_EX}[{self._timestamp()}] {Fore.GREEN}✅ {message}")
 
+    def debug(self, message):
+        """Logs de depuración: se muestran sólo si el nivel es DEBUG"""
+        if self.level == 'DEBUG':
+            print(f"{Fore.LIGHTBLACK_EX}[{self._timestamp()}] {Fore.CYAN}🐞 DEBUG: {message}")
+
     def trade(self, symbol, side, price, amount):
         # Operación (Formato especial muy visible)
         ts = self._timestamp()

@@ -4,16 +4,85 @@ import json
 import time
 import os
 from utils.logger import log
+from cryptography.fernet import Fernet
+import base64
+import hashlib
 
 DB_FOLDER = "data"
 DB_NAME = "bot_data.db"
 DB_PATH = os.path.join(DB_FOLDER, DB_NAME)
+
+# Gestión segura de la clave de encriptación:
+# 1) Si existe la variable de entorno GRIDBOT_MASTER_KEY, se usa (se deriva a clave Fernet si no es una clave Fernet válida)
+# 2) Si existe el fichero de clave en data/.encryption_key se lee y se usa
+# 3) Si no existe, se genera una nueva clave Fernet y se persiste en data/.encryption_key con permisos restringidos
+
+def _load_or_generate_encryption_key():
+    # 1) variable de entorno
+    env_key = os.getenv('GRIDBOT_MASTER_KEY')
+    if env_key:
+        # Si parece una clave Fernet (44 bytes base64), usarla tal cual
+        try:
+            if isinstance(env_key, str) and len(env_key) == 44:
+                return env_key.encode()
+        except Exception:
+            pass
+        # Si no, derivar una clave Fernet estable a partir del valor proporcionado
+        hash_bytes = hashlib.sha256(env_key.encode()).digest()
+        return base64.urlsafe_b64encode(hash_bytes)
+
+    # 2) fichero en data/
+    key_path = os.path.join(DB_FOLDER, '.encryption_key')
+    try:
+        if os.path.exists(key_path):
+            with open(key_path, 'rb') as f:
+                return f.read().strip()
+    except Exception:
+        pass
+
+    # 3) generar nueva y persistir
+    try:
+        new_key = Fernet.generate_key()
+        os.makedirs(DB_FOLDER, exist_ok=True)
+        with open(key_path, 'wb') as f:
+            f.write(new_key)
+        try:
+            os.chmod(key_path, 0o600)
+        except Exception:
+            pass
+        return new_key
+    except Exception:
+        # Fallback: derivar de valor fijo (sólo si todo lo demás falla)
+        secret = "gridbot-pro-2024-secret"
+        hash_bytes = hashlib.sha256(secret.encode()).digest()
+        return base64.urlsafe_b64encode(hash_bytes)
+
+ENCRYPTION_KEY = _load_or_generate_encryption_key()
+cipher_suite = Fernet(ENCRYPTION_KEY)
 
 class BotDatabase:
     def __init__(self):
         if not os.path.exists(DB_FOLDER):
             os.makedirs(DB_FOLDER)
         self._init_db()
+
+    @staticmethod
+    def _encrypt_data(data):
+        """Encripta una cadena de texto"""
+        if not data:
+            return None
+        return cipher_suite.encrypt(data.encode()).decode()
+    
+    @staticmethod
+    def _decrypt_data(encrypted_data):
+        """Desencripta una cadena de texto. Si falla, devuelve None (no expone datos encriptados)."""
+        if not encrypted_data:
+            return None
+        try:
+            return cipher_suite.decrypt(encrypted_data.encode()).decode()
+        except Exception as e:
+            log.error(f"Error desencriptando datos: {e}")
+            return None
 
     def _get_conn(self):
         """Abre una conexión nueva segura para el hilo actual"""
@@ -87,6 +156,27 @@ class BotDatabase:
                 )
             ''')
             # -----------------------------------------------------
+
+            # --- EXCHANGES MANAGEMENT ---
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS exchanges (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT UNIQUE NOT NULL,
+                    api_key TEXT,
+                    secret_key TEXT,
+                    passphrase TEXT,
+                    is_active BOOLEAN DEFAULT 1,
+                    use_testnet BOOLEAN DEFAULT 0,
+                    created_at REAL,
+                    updated_at REAL
+                )
+            ''')
+            # Añadir columna use_testnet a exchanges si no existe (migración)
+            try:
+                cursor.execute("ALTER TABLE exchanges ADD COLUMN use_testnet BOOLEAN DEFAULT 0")
+            except Exception:
+                pass
+            # --------------------------------
 
             cursor.execute("SELECT value FROM bot_info WHERE key='next_buy_id'")
             if not cursor.fetchone():
@@ -271,6 +361,111 @@ class BotDatabase:
             data[symbol] = value_usdc
             cursor.execute("INSERT OR REPLACE INTO bot_info (key, value) VALUES (?, ?)", ('coins_initial_equity', json.dumps(data)))
             conn.commit()
+
+    # --- EXCHANGES MANAGEMENT ---
+    
+    def save_exchange(self, name: str, api_key: str, secret_key: str, passphrase: str = None, use_testnet: bool = False) -> dict:
+        """Guarda o actualiza credenciales de un exchange (ENCRIPTADAS)"""
+        try:
+            # Trim y encriptar los datos sensibles
+            api_key = api_key.strip() if isinstance(api_key, str) else api_key
+            secret_key = secret_key.strip() if isinstance(secret_key, str) else secret_key
+            passphrase = passphrase.strip() if isinstance(passphrase, str) else passphrase
+
+            encrypted_api_key = self._encrypt_data(api_key)
+            encrypted_secret_key = self._encrypt_data(secret_key)
+            encrypted_passphrase = self._encrypt_data(passphrase) if passphrase else None
+            
+            with self._get_conn() as conn:
+                cursor = conn.cursor()
+                now = time.time()
+                
+                # Verificar si existe
+                cursor.execute("SELECT id FROM exchanges WHERE name = ?", (name,))
+                exists = cursor.fetchone()
+                
+                if exists:
+                    # Actualizar
+                    cursor.execute('''UPDATE exchanges SET api_key = ?, secret_key = ?, passphrase = ?, use_testnet = ?, updated_at = ? 
+                                     WHERE name = ?''',
+                                 (encrypted_api_key, encrypted_secret_key, encrypted_passphrase, int(bool(use_testnet)), now, name))
+                else:
+                    # Insertar
+                    cursor.execute('''INSERT INTO exchanges (name, api_key, secret_key, passphrase, is_active, use_testnet, created_at, updated_at)
+                                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
+                                 (name, encrypted_api_key, encrypted_secret_key, encrypted_passphrase, 1, int(bool(use_testnet)), now, now))
+                
+                conn.commit()
+                return {"success": True, "message": f"Exchange '{name}' guardado correctamente"}
+        except Exception as e:
+            log.error(f"Error guardando exchange: {e}")
+            return {"success": False, "message": str(e)}
+    
+    def get_exchanges(self) -> list:
+        """Obtiene todos los exchanges configurados"""
+        try:
+            with self._get_conn() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT name, api_key, secret_key, passphrase, is_active, use_testnet FROM exchanges ORDER BY created_at")
+                rows = cursor.fetchall()
+                
+                exchanges = []
+                for row in rows:
+                    exchanges.append({
+                        "name": row[0],
+                        "has_credentials": bool(row[1] and row[2]),
+                        "is_active": bool(row[4]),
+                        "use_testnet": bool(row[5]),
+                        "type": "bitget" if row[0].lower() == "bitget" else "binance"
+                    })
+                return exchanges
+        except Exception as e:
+            log.error(f"Error obteniendo exchanges: {e}")
+            return []
+    
+    def get_exchange_credentials(self, name: str) -> dict:
+        """Obtiene credenciales de un exchange específico (DESENCRIPTADAS)"""
+        try:
+            with self._get_conn() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT api_key, secret_key, passphrase, use_testnet FROM exchanges WHERE name = ?", (name,))
+                row = cursor.fetchone()
+                
+                if row:
+                    # Desencriptar los datos
+                    api_key = self._decrypt_data(row[0]) if row[0] else None
+                    secret_key = self._decrypt_data(row[1]) if row[1] else None
+                    passphrase = self._decrypt_data(row[2]) if row[2] else None
+                    use_testnet = bool(row[3])
+
+                    # Si la desencriptación falla, devolver un error claro para que el cliente lo gestione
+                    if api_key is None or secret_key is None:
+                        log.error(f"No se pudieron desencriptar las credenciales para exchange {name}")
+                        return {"success": False, "message": "No se pudieron desencriptar las credenciales. Comprueba la clave de encriptación"}
+
+                    return {
+                        "success": True,
+                        "api_key": api_key,
+                        "secret_key": secret_key,
+                        "passphrase": passphrase or "",
+                        "use_testnet": use_testnet
+                    }
+                return {"success": False, "message": "Exchange no encontrado"}
+        except Exception as e:
+            log.error(f"Error obteniendo credenciales: {e}")
+            return {"success": False, "message": str(e)}
+    
+    def delete_exchange(self, name: str) -> dict:
+        """Elimina un exchange"""
+        try:
+            with self._get_conn() as conn:
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM exchanges WHERE name = ?", (name,))
+                conn.commit()
+                return {"success": True, "message": f"Exchange '{name}' eliminado"}
+        except Exception as e:
+            log.error(f"Error eliminando exchange: {e}")
+            return {"success": False, "message": str(e)}
 
     def get_coin_initial_balance(self, symbol):
         with self._get_conn() as conn:

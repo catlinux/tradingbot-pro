@@ -890,15 +890,12 @@ footer {
     border-color: #dc2626 !important;
     color: #ffffff !important;
     font-weight: 600 !important;
-    transition: all 0.3s ease !important;
 }
 
 #btn-logout:hover {
     background-color: #b91c1c !important;
     border-color: #991b1b !important;
     color: #ffffff !important;
-    transform: translateY(-2px) !important;
-    box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4) !important;
 }
 
 /* Variante especial para modal de donación */
@@ -1034,7 +1031,7 @@ footer {
 .auth-logged-section {
     display: none !important;
     text-align: center !important;
-    margin-top: 20px !important;
+    /*margin-top: 20px !important;*/
 }
 
 .auth-logged-section.active {
@@ -1155,3 +1152,175 @@ footer {
 
 /* ========== FIN DEL STYLESHEET ========== */
 
+/* ========== TOOLTIPS PERSONALIZADOS BLANCOS ========== */
+
+/* Estilo general del tooltip */
+.tooltip {
+    --bs-tooltip-bg: #ffffff !important;
+}
+
+/* Contenedor interno del tooltip */
+.tooltip-inner {
+    background-color: #ffffff !important;
+    color: #111827 !important;
+    border: 1px solid #d1d5db !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+    font-size: 0.875rem;
+    max-width: 300px;
+    padding: 10px 14px !important;
+    border-radius: 6px;
+    line-height: 1.5;
+    text-align: left;
+}
+
+/* Flechas de los tooltips - todas las direcciones */
+.tooltip-arrow {
+    display: block !important;
+}
+
+.tooltip-arrow::before {
+    border-color: transparent #ffffff !important;
+    background-color: transparent !important;
+}
+
+.bs-tooltip-top .tooltip-arrow::before {
+    border-top-color: #ffffff !important;
+    border-right-color: transparent !important;
+    border-bottom-color: transparent !important;
+    border-left-color: transparent !important;
+}
+
+.bs-tooltip-bottom .tooltip-arrow::before {
+    border-top-color: transparent !important;
+    border-right-color: transparent !important;
+    border-bottom-color: #ffffff !important;
+    border-left-color: transparent !important;
+}
+
+.bs-tooltip-left .tooltip-arrow::before {
+    border-top-color: transparent !important;
+    border-right-color: transparent !important;
+    border-bottom-color: transparent !important;
+    border-left-color: #ffffff !important;
+}
+
+.bs-tooltip-right .tooltip-arrow::before {
+    border-top-color: transparent !important;
+    border-right-color: #ffffff !important;
+    border-bottom-color: transparent !important;
+    border-left-color: transparent !important;
+}
+
+/* Asegurar que el tooltip tenga fondo blanco en todos los estados */
+.tooltip.show {
+    opacity: 1;
+}
+
+.tooltip.show .tooltip-inner {
+    background-color: #ffffff !important;
+}
+
+/* ========== LÍNEA DIVISORA DENTRO DEL CARD ========== */
+.config-divider-line {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    top: 160px; /* posición fija desde el borde superior - la más baja del contenedor */
+    height: 1px;
+    background-color: rgb(16 24 32 / 40%);
+    /* visual preserved: no cambiar color/grosor */
+}
+
+/* Contenedor de autenticación con altura FIJA para evitar movimientos al cambiar estado de login */
+#auth-section {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    height: 165px;
+    padding-bottom: 0;
+    overflow: hidden;
+}
+
+/* ========== SECCIÓN DE EXCHANGE - FIJA DEBAJO DE AUTENTICACIÓN ========== */
+#exchange-section {
+    position: relative;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid rgb(16 24 32 / 40%);
+}
+
+/* Título de Gestión de Exchanges */
+.exchange-section-title {
+    font-size: 0.95rem;
+    margin-bottom: 1rem;
+    margin-top: 0;
+}
+
+/* ========== AJUSTES ESPACIADO - SELECT EXCHANGE ========== */
+/* Separar el texto 'Seleccionar Exchange' de la línea superior 12px */
+label[for="exchange-select"] {
+    margin-top: 0 !important;
+    display: block;
+    margin-bottom: 8px;
+}
+
+/* Bajar la caja seleccionable 3px adicionalmente */
+#exchange-select {
+    margin-top: 13px !important;
+}
+
+/* Estilos visuales para selector deshabilitado por autenticación */
+#exchange-select[disabled], .select-disabled-by-auth {
+    opacity: 0.8;
+    cursor: not-allowed;
+    pointer-events: none;
+    background-color: #f8f9fa;
+}
+
+/* ========== ESTILOS PARA ELEMENTOS DE ESTADO ========== */
+/* Banner de autenticación - ocultado por defecto */
+#auth-banner {
+    display: none;
+}
+
+#auth-banner.visible {
+    display: flex;
+}
+
+/* Elemento de estado de login - colores según estado */
+#config-login-status {
+    font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    font-size: 12px;
+    margin-top: 6px;
+}
+
+#config-login-status.status-active {
+    color: #16a34a;
+}
+
+#config-login-status.status-warning {
+    color: #f59e0b;
+}
+
+#config-login-status.status-inactive {
+    color: #6b7280;
+}
+
+/* Email en configuración */
+#config-email {
+    font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    font-size: 12px;
+    color: #6b7280;
+    margin-top: 6px;
+    word-break: break-word;
+}
+
+/* Contenedor de gráficos con opacidad */
+.chart-container.opacity-reduced {
+    opacity: 0.6;
+}
+
+/* Posicionamiento relativo para gráficos */
+.chart-position-relative {
+    position: relative;
+}

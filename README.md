@@ -103,8 +103,8 @@ Las siguientes funcionalidades se están preparando. Se irán activando progresi
 
 - :white_check_mark: **Creación Dashboard** - Página inicial del proyecto
 - :white_check_mark: **Connexión exchange** - Conexión a Binance mediante API's
-- :hourglass_flowing_sand: **Gestión usuario** - Apartado de usuario
-- :stop_button: **Multi conexión** - Soporte para varios exchanges
+- :white_check_mark: **Gestión usuario** - Apartado de usuario
+- :hourglass_flowing_sand: **Multi conexión** - Soporte para varios exchanges
 - :white_check_mark: **Testnet** - Conexión a Testnet para pruebas
 - :stop_button: **Backtesting** - Cálculo de estrategias por histórico de gráficos
 - :stop_button: **Creación de los grids** - Formulario para colocar las estrategias
@@ -115,7 +115,7 @@ Las siguientes funcionalidades se están preparando. Se irán activando progresi
 - :stop_button: **Análisis técnico avanzado** - Indicadores adicionales
 - :stop_button: **Multi-grid simultáneo** - Operar varios pares al mismo tiempo
 - :stop_button: **Estrategias predefinidas** - Plantillas listas para usar
-- :stop_button: **Alertas por Telegram** - Notificaciones en tiempo real
+- :hourglass_flowing_sand: **Alertas por Telegram** - Notificaciones en tiempo real
 - :stop_button: **Exportación de reportes** - Generación de PDF con estadísticas
 - :stop_button: **Exportación a xls** - Crea archivos xls para leer en excel o similar.
 

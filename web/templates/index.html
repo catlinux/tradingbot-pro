@@ -103,7 +103,7 @@
     </nav>
 
     <!-- Banner de Autenticación (dinámico según estado) -->
-    <div id="auth-banner" class="auth-banner" style="display: none;">
+    <div id="auth-banner" class="auth-banner">
         <div class="auth-banner-content">
             <i class="fa-solid fa-circle-info me-2"></i>
             <span id="auth-banner-text"></span>
@@ -124,7 +124,7 @@
                     <div class="col-md-2" data-auth-required="true">
                         <div class="card dashboard-card p-3 h-100">
                             <small class="dashboard-label">Estado</small>
-                            <div id="summary-status" class="dashboard-value">-- <span id="summary-uptime" class="dashboard-sub">Uptime: --</span></div>
+                            <div id="summary-status" class="dashboard-value">-- <span id="summary-uptime" class="dashboard-sub" data-bs-toggle="tooltip" title="Tooltip">Uptime: --</span></div>
                         </div>
                     </div>
                     <!-- Resto de tarjetas (ocultas sin login) -->
@@ -136,14 +136,14 @@
                         </div>
                         <div class="col-md-2" data-auth-required="true">
                             <div class="card dashboard-card p-3 h-100">
-                                <small class="dashboard-label">PnL sesión</small>
-                                <div id="summary-pnl-session" class="dashboard-value dashboard-value-success">$0.00</div>
+                                <small class="dashboard-label">PnL mensual</small>
+                                <div id="summary-pnl-session" class="dashboard-value dashboard-value-success" data-bs-toggle="tooltip" title="Tooltip">$0.00</div>
                             </div>
                         </div>
                         <div class="col-md-2" data-auth-required="true">
                             <div class="card dashboard-card p-3 h-100">
-                                <small class="dashboard-label">PnL grid</small>
-                                <div id="summary-pnl-grid" class="dashboard-value">$0.00</div>
+                                <small class="dashboard-label">PnL total</small>
+                                <div id="summary-pnl-grid" class="dashboard-value" data-bs-toggle="tooltip" title="Tooltip">$0.00</div>
                             </div>
                         </div>
                         <div class="col-md-2" data-auth-required="true">
@@ -179,13 +179,13 @@
                     </div>
                     <div class="col-md-2">
                         <div class="card dashboard-card p-3 h-100">
-                            <small class="dashboard-label">PnL sesión</small>
+                            <small class="dashboard-label">PnL mensual</small>
                             <div class="dashboard-value text-muted small">••••••••</div>
                         </div>
                     </div>
                     <div class="col-md-2">
                         <div class="card dashboard-card p-3 h-100">
-                            <small class="dashboard-label">PnL grid</small>
+                            <small class="dashboard-label">PnL total</small>
                             <div class="dashboard-value text-muted small">••••••••</div>
                         </div>
                     </div>
@@ -270,7 +270,7 @@
                                     </div>
                                 </div>
                                 <div class="flex-grow-1 d-flex align-items-center justify-content-center">
-                                    <div id="dummyBalanceChartHistory" class="chart-container chart-container-custom" style="opacity: 0.6;"></div>
+                                    <div id="dummyBalanceChartHistory" class="chart-container chart-container-custom opacity-reduced"></div>
                                 </div>
                             </div>
                         </div>
@@ -467,7 +467,7 @@
                         <div class="card dashboard-card p-3 h-100">
                             <small class="dashboard-label">Usuario</small>
                             <div class="dashboard-value config-username" id="config-username">--</div>
-                            <div id="config-email" style="font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 12px; color: #6b7280; margin-top: 6px; word-break: break-word;">--</div>
+                            <div id="config-email"></div>
                         </div>
                     </div>
                     <div class="col-md-3">
@@ -500,12 +500,16 @@
                 <div class="row mb-4 config-row-margin">
                     <div class="col-md-3">
                         <div class="card dashboard-card p-4 config-card-full">
-                            <h6 class="fw-bold config-card-title">Gestión de Usuario</h6>
+                            <h6 class="fw-bold config-card-title">Gestión de Usuarios</h6>
                             <div class="config-card-content">
-                                <!-- SECCIÓN AUTENTICACIÓN -->
+                                <!-- SECCIÓN AUTENTICACIÓN (mantener para otros usos) -->
                                 <div id="auth-section">
                                     <!-- Botones de login/crear usuario -->
                                     <div class="auth-buttons-container" id="auth-buttons">
+                                        <!-- Usuario desconectado -->
+                                        <div class="auth-logged-label mb-3 text-center" id="disconnected-label">
+                                            Usuario Desconectado
+                                        </div>
                                         <button class="btn btn-sm btn-primary w-100 d-none" id="btn-login" onclick="openLoginModal()">
                                             <i class="fa-solid fa-sign-in-alt me-2"></i> Login
                                         </button>
@@ -521,19 +525,37 @@
                                     <div class="auth-logged-section" id="auth-logged">
                                         <div class="auth-logged-label">Conectado como</div>
                                         <div class="auth-logged-username" id="logged-username">--</div>
+                                        <button class="btn btn-sm btn-primary w-100 mb-2" id="btn-change-password" onclick="openChangePasswordModal()">
+                                            <i class="fa-solid fa-lock me-2"></i> Cambiar Contraseña
+                                        </button>
                                         <button class="btn btn-sm btn-outline-danger w-100" id="btn-logout" onclick="logout()">
                                             <i class="fa-solid fa-sign-out-alt me-2"></i> Cerrar Sesión
                                         </button>
                                     </div>
+                                </div>
+                                
+                                <!-- GESTIÓN DE EXCHANGES -->
+                                <div id="exchange-section">
+                                    <h6 class="fw-bold exchange-section-title" id="exchange-header">Gestión de Exchanges</h6>
+                                    <label class="form-label small text-muted">Selecciona el exchange</label>
+                                    <select class="form-select form-select-sm" id="exchange-select" onchange="onExchangeSelected()" disabled>
+                                        <option value="">-- Elige un exchange --</option>
+                                    </select>
+                                    <button class="btn btn-sm btn-success w-100 mt-3" id="btn-add-exchange" onclick="openAddExchangeModal()">
+                                        <i class="fa-solid fa-plus me-2"></i> Añade tu exchange
+                                    </button>
                                 </div>
                             </div>
                         </div>
                     </div>
                     <div class="col-md-9">
                         <div class="card dashboard-card p-4 config-card-full">
-                            <h6 class="fw-bold config-card-title">Contenido Derecho</h6>
+                            <h6 class="fw-bold config-card-title">Gestión de Exchange</h6>
                             <div class="flex-grow">
-                                <!-- Contenido a definir -->
+                                <!-- Contenido dinámico para configurar exchanges -->
+                                <div id="exchange-form-container">
+                                    <p class="text-muted text-center py-4">Selecciona un exchange para configurar</p>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -541,6 +563,56 @@
 
             </div>
 
+        </div>
+    </div>
+
+    <!-- MODAL PARA AÑADIR NUEVO EXCHANGE -->
+    <div class="modal fade" id="addExchangeModal" tabindex="-1" aria-labelledby="addExchangeModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="addExchangeModalLabel">Añadir Nuevo Exchange</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="addExchangeForm">
+                        <div class="mb-3">
+                            <label for="new-exchange-name" class="form-label">Exchange</label>
+                            <input type="text" class="form-control" id="new-exchange-name" placeholder="Ej: Binance, Bitget" required onchange="this.value = this.value.toUpperCase();" onkeyup="this.value = this.value.toUpperCase();">
+                            <small class="form-text text-muted">Nombre del exchange (se convertirá a mayúsculas automáticamente)</small>
+                        </div>
+                        <div class="mb-3">
+                            <label for="new-exchange-api-key" class="form-label">API Key</label>
+                            <input type="text" class="form-control" id="new-exchange-api-key" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="new-exchange-secret-key" class="form-label">Secret Key</label>
+                            <div class="input-group">
+                                <input type="password" class="form-control" id="new-exchange-secret-key" required autocomplete="new-password">
+                                <span class="input-group-text">
+                                    <input class="form-check-input me-1" type="checkbox" id="new-exchange-show-secret" onchange="document.getElementById('new-exchange-secret-key').type = this.checked ? 'text' : 'password'">
+                                    <small>Mostrar</small>
+                                </span>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="new-exchange-passphrase" class="form-label">Passphrase <span class="text-muted">(opcional)</span></label>
+                            <input type="password" class="form-control" id="new-exchange-passphrase" placeholder="Dejar en blanco si el exchange no lo exige" autocomplete="new-password">
+                        </div>
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" value="1" id="new-exchange-testnet">
+                            <label class="form-check-label" for="new-exchange-testnet">
+                                Usar Testnet (red de pruebas)
+                            </label>
+                        </div>
+                        <div id="add-exchange-error" class="alert alert-danger d-none"></div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" onclick="performAddExchange()">Guardar Exchange</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -629,7 +701,7 @@
                     <form id="loginForm">
                         <div class="mb-3">
                             <label for="login-username" class="form-label">Usuario</label>
-                            <input type="text" class="form-control" id="login-username" required>
+                            <input type="text" class="form-control" id="login-username" required autocomplete="username">
                         </div>
                         <div class="mb-3">
                             <label for="login-password" class="form-label">Contraseña</label>
@@ -686,7 +758,7 @@
                         
                         <div class="mb-3">
                             <label for="create-security-answer" class="form-label">Respuesta de Seguridad</label>
-                            <input type="text" class="form-control" id="create-security-answer" required>
+                            <input type="text" class="form-control" id="create-security-answer" required autocomplete="username">
                             <small class="form-text text-muted">Se encriptará. Distingue mayúsculas</small>
                         </div>
                         
@@ -735,8 +807,43 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="button" class="btn btn-warning" id="recovery-next-btn" onclick="recoveryGetQuestion()">Siguiente</button>
-                    <button type="button" class="btn btn-primary d-none" id="recovery-submit-btn" onclick="performRecovery()">Resetear Contraseña</button>
+                    <button type="button" class="btn btn-primary" id="recovery-next-btn" onclick="recoveryGetQuestion()">Siguiente</button>
+                    <button type="button" class="btn btn-success d-none" id="recovery-submit-btn" onclick="performRecovery()">Resetear Contraseña</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL CAMBIAR CONTRASEÑA -->
+    <div class="modal fade" id="changePasswordModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold"><i class="fa-solid fa-lock me-2"></i>Cambiar Contraseña</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="changePasswordForm">
+                        <!-- Campo de usuario oculto para mejorar accesibilidad de formularios de contraseña -->
+                        <input type="text" id="change-password-username" class="visually-hidden" autocomplete="username">
+                        <div class="mb-3">
+                            <label for="current-password" class="form-label">Contraseña Actual</label>
+                            <input type="password" class="form-control" id="current-password" required autocomplete="current-password">
+                        </div>
+                        <div class="mb-3">
+                            <label for="new-password" class="form-label">Nueva Contraseña</label>
+                            <input type="password" class="form-control" id="new-password" required autocomplete="new-password">
+                        </div>
+                        <div class="mb-3">
+                            <label for="new-password-confirm" class="form-label">Confirmar Nueva Contraseña</label>
+                            <input type="password" class="form-control" id="new-password-confirm" required autocomplete="new-password">
+                        </div>
+                        <div id="change-password-error" class="alert alert-danger d-none"></div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" onclick="performChangePassword()">Cambiar Contraseña</button>
                 </div>
             </div>
         </div>
@@ -747,6 +854,7 @@
     
     <!-- Lógica de Frontend (Módulos ES6) -->
     <script src="/static/js/auth.js"></script>
+    <script src="/static/js/exchanges.js"></script>
     <script type="module" src="/static/js/dashboard.js"></script>
 
 </body>
