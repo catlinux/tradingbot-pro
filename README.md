@@ -105,6 +105,7 @@ Las siguientes funcionalidades se están preparando. Se irán activando progresi
 - :white_check_mark: **Connexión exchange** - Conexión a Binance mediante API's
 - :white_check_mark: **Gestión usuario** - Apartado de usuario
 - :hourglass_flowing_sand: **Multi conexión** - Soporte para varios exchanges
+- :white_check_mark: **Gestión  API's** - Reforzar seguridad API's y passwords
 - :white_check_mark: **Testnet** - Conexión a Testnet para pruebas
 - :stop_button: **Backtesting** - Cálculo de estrategias por histórico de gráficos
 - :stop_button: **Creación de los grids** - Formulario para colocar las estrategias
