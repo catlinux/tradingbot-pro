@@ -295,14 +295,41 @@ class BotDatabase:
             return row[0] if row else None
 
     def log_balance_snapshot(self, equity, exchange='default'):
-        """Guarda instantánea del balance con referencia al exchange (p.ej. 'binance')."""
-        with self._get_conn() as conn:
-            cursor = conn.cursor()
-            # Usar time.time() para tener timestamps únicos incluso a nivel de milisegundos
-            current_ts = time.time()
-            # Asegurarse de que el timestamp es único añadiendo microsegundos si es necesario
-            cursor.execute("INSERT INTO balance_history (timestamp, equity, exchange) VALUES (?, ?, ?)", (current_ts, equity, exchange))
-            conn.commit()
+        """Guarda instantánea del balance con referencia al exchange (p.ej. 'binance').
+        Evita insertar duplicados cercanos en el tiempo o con variación insignificante para reducir ruido y duplicados.
+        Devuelve True si se insertó una fila nueva, False si se omitió por deduplicación.
+        """
+        try:
+            with self._get_conn() as conn:
+                cursor = conn.cursor()
+                current_ts = time.time()
+
+                # Recuperar última snapshot para este exchange
+                cursor.execute("SELECT timestamp, equity FROM balance_history WHERE exchange = ? ORDER BY timestamp DESC LIMIT 1", (exchange,))
+                last = cursor.fetchone()
+
+                # Parámetros de deduplicación
+                MIN_INTERVAL = 50  # segundos mínimos entre snapshots para considerar insertar
+                MIN_DELTA = 0.01   # diferencia mínima en equity para considerar distinto
+
+                if last:
+                    try:
+                        last_ts = float(last[0])
+                        last_eq = float(last[1])
+                        if (current_ts - last_ts) < MIN_INTERVAL and abs(float(equity) - last_eq) <= MIN_DELTA:
+                            # Omitir inserción si es demasiado cercano en el tiempo y sin cambios relevantes
+                            return False
+                    except Exception:
+                        # Si falla el parsing, seguimos y permitimos la inserción
+                        pass
+
+                # Insertar snapshot
+                cursor.execute("INSERT INTO balance_history (timestamp, equity, exchange) VALUES (?, ?, ?)", (current_ts, equity, exchange))
+                conn.commit()
+                return True
+        except Exception as e:
+            log.error(f"Error guardando snapshot en DB: {e}")
+            return False
 
     def get_balance_history(self, from_timestamp=0, exchange=None):
         """Si `exchange` es None devuelve datos de todos los exchanges; si se especifica, filtra por `exchange`."""
@@ -314,6 +341,20 @@ class BotDatabase:
                 cursor.execute("SELECT timestamp, equity FROM balance_history WHERE timestamp >= ? ORDER BY timestamp ASC", (from_timestamp,))
             rows = cursor.fetchall()
             return rows
+
+    def get_last_balance_snapshot(self, exchange: str):
+        """Devuelve la última snapshot (timestamp, equity) para un `exchange`, o `None` si no existe."""
+        try:
+            with self._get_conn() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT timestamp, equity FROM balance_history WHERE exchange = ? ORDER BY timestamp DESC LIMIT 1", (exchange,))
+                row = cursor.fetchone()
+                if row:
+                    return row  # (timestamp, equity)
+                return None
+        except Exception as e:
+            log.error(f"Error obteniendo última snapshot para {exchange}: {e}")
+            return None
 
     def set_session_start_balance(self, value):
         with self._get_conn() as conn:

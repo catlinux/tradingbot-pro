@@ -199,14 +199,86 @@ def _calculate_rsi(candles, period=14):
         log.debug(f"Error calculating RSI: {e}")
         return 50.0
 
+def _background_snapshot_scheduler():
+    """Hilo que ejecuta snapshots periódicos incluso si el motor no está arrancado.
+    - Exchanges activos: cada 60s (solo si el motor NO está arrancado para evitar duplicados)
+    - Exchanges inactivos: cada 180s
+    """
+    log.info("📸 Scheduler de snapshots en background iniciado.")
+    counter = 0
+    while True:
+        try:
+            counter = (counter + 1) % 3
+            exchanges = db.get_exchanges()
+            active_name = getattr(bot_instance, 'active_exchange_name', None) if bot_instance else None
+            active_test = getattr(bot_instance, 'active_exchange_use_testnet', False) if bot_instance else False
+
+            for e in exchanges:
+                name = e.get('name')
+                use_testnet = e.get('use_testnet', False)
+                ex_key = f"{name}-testnet" if use_testnet else name
+
+                is_active = False
+                if active_name and active_name.lower() == name.lower():
+                    is_active = True
+
+                # Active exchanges: intentar cada 60s, pero si el bot está corriendo dejamos que lo haga el motor
+                if is_active and bot_instance and getattr(bot_instance, 'is_running', False):
+                    continue
+
+                # For inactive exchanges, solo procesar cada 3 ciclos (180s)
+                if not is_active and counter != 0:
+                    continue
+
+                # Intentar snapshot real con credenciales
+                try:
+                    creds = db.get_exchange_credentials(name)
+                    if creds.get('success') and creds.get('api_key') and creds.get('secret_key'):
+                        fetched = None
+                        try:
+                            fetched = __import__('core.exchange', fromlist=['']).BinanceConnector.fetch_balance_snapshot_static(creds.get('api_key'), creds.get('secret_key'), creds.get('passphrase'), creds.get('use_testnet', False), exchange_type=e.get('type', 'binance'))
+                        except Exception as fe:
+                            log.debug(f"Error fetching snapshot static: {fe}")
+                        if fetched and fetched > 0:
+                            db.log_balance_snapshot(fetched, exchange=ex_key)
+                            log.debug(f"[scheduler] Snapshot real para {ex_key}: {fetched:.2f} USDC")
+                            # pequeña espera para no pisar rate limits
+                            time.sleep(0.5)
+                            continue
+                except Exception as inner:
+                    log.debug(f"Error scheduler credentials for {name}: {inner}")
+
+                # Fallback: carry-forward
+                try:
+                    last = db.get_last_balance_snapshot(ex_key)
+                    if last:
+                        last_equity = float(last[1])
+                        db.log_balance_snapshot(last_equity, exchange=ex_key)
+                        log.debug(f"[scheduler] Carry-forward snapshot para {ex_key}: {last_equity:.2f} USDC")
+                except Exception:
+                    pass
+        except Exception as e:
+            log.error(f"Error en snapshot scheduler: {e}")
+
+        # Dormir 60s por ciclo (las inactivas se ejecutan cada 3 ciclos)
+        time.sleep(60)
+
+
 def start_server(bot, host=None, port=None):
     global bot_instance
     bot_instance = bot
     load_dotenv('config/.env', override=True)
     if host is None:
-        host = os.getenv('WEB_HOST', '127.0.0.1')
+        host = os.getenv('WEB_HOST', '127.0.0.0')
     if port is None:
         port = int(os.getenv('WEB_PORT', 8001))
+
+    # Lanzar scheduler de snapshots en background (daemon)
+    try:
+        threading.Thread(target=_background_snapshot_scheduler, daemon=True).start()
+    except Exception as e:
+        log.error(f"No se pudo iniciar snapshot scheduler: {e}")
+
     uvicorn.run(app, host=host, port=port, log_level="error")
 
 def format_uptime(seconds):
@@ -475,6 +547,32 @@ def get_balance_history_api(exchange: str = None):
         # Si no se pasa `exchange` usamos el actual del bot (si existe)
         if not exchange and bot_instance and bot_instance.connector and bot_instance.connector.exchange and hasattr(bot_instance.connector.exchange, 'id'):
             exchange = bot_instance.connector.exchange.id
+        # Si se pasa un exchange intentamos usar la serie exacta si existe (permite ver mainnet aun cuando el bot esté conectado en testnet)
+        if exchange:
+            try:
+                # 1) Si ya existe historial para 'exchange' (mainnet), lo usamos preferentemente
+                last_exact = db.get_last_balance_snapshot(exchange)
+                if last_exact:
+                    # Usamos la serie tal cual
+                    pass
+                else:
+                    # 2) Si no existe serie exacta, comprobar BD si ese exchange está marcado como testnet
+                    creds = db.get_exchange_credentials(exchange)
+                    if creds.get('success') and creds.get('use_testnet'):
+                        if not str(exchange).endswith('-testnet'):
+                            exchange = f"{exchange}-testnet"
+            except Exception:
+                # Si la consulta falla, y el bot está conectado a ese mismo exchange en modo testnet, aplicamos sufijo
+                try:
+                    if getattr(bot_instance, 'active_exchange_use_testnet', False) and getattr(bot_instance, 'active_exchange_name', None) == exchange:
+                        if not str(exchange).endswith('-testnet'):
+                            exchange = f"{exchange}-testnet"
+                except Exception:
+                    pass
+        else:
+            # Aplicar sufijo -testnet si el bot está conectado a testnet (por defecto)
+            if getattr(bot_instance, 'active_exchange_use_testnet', False) and exchange:
+                exchange = f"{exchange}-testnet"
         full_hist = db.get_balance_history(from_timestamp=0, exchange=exchange)
         session_start = bot_instance.global_start_time if bot_instance else 0
         session_hist = [x for x in full_hist if x[0] >= session_start]
@@ -513,7 +611,19 @@ def record_balance_snapshot():
                         total_usdc += qty * price
             
             # Registrar en DB
-            ex_id = bot_instance.connector.exchange.id if hasattr(bot_instance.connector.exchange, 'id') else 'unknown'
+            ex_id = 'unknown'
+            try:
+                if hasattr(bot_instance, 'active_exchange_name') and bot_instance.active_exchange_name:
+                    ex_id = bot_instance.active_exchange_name
+                    if getattr(bot_instance, 'active_exchange_use_testnet', False):
+                        ex_id = f"{ex_id}-testnet"
+                else:
+                    # Fallback: usar el id interno de ccxt si disponible
+                    if bot_instance.connector and bot_instance.connector.exchange and hasattr(bot_instance.connector.exchange, 'id'):
+                        ex_id = bot_instance.connector.exchange.id
+            except Exception:
+                pass
+
             db.log_balance_snapshot(total_usdc, exchange=ex_id)
             
             return {"success": True, "balance": round(total_usdc, 2)}
@@ -772,6 +882,17 @@ def reset_global_chart_api(exchange: str = None):
         # Si no se pasa exchange usamos el actual del bot (si existe)
         if not exchange and bot_instance and bot_instance.connector and bot_instance.connector.exchange and hasattr(bot_instance.connector.exchange, 'id'):
             exchange = bot_instance.connector.exchange.id
+            if getattr(bot_instance, 'active_exchange_use_testnet', False):
+                exchange = f"{exchange}-testnet"
+        else:
+            # Si se pasó un exchange, comprobar en BD si está marcado como testnet
+            try:
+                creds = db.get_exchange_credentials(exchange) if exchange else {}
+                if creds.get('success') and creds.get('use_testnet') and exchange and not str(exchange).endswith('-testnet'):
+                    exchange = f"{exchange}-testnet"
+            except Exception:
+                pass
+
         db.clear_balance_history(exchange=exchange)
         if exchange:
             return {"status": "success", "message": f"Gráfica Global reiniciada para {exchange}."}
@@ -804,6 +925,9 @@ def snapshot_balance_api(exchange: str = None):
         # Determinamos exchange si no se provee
         if not exchange and bot_instance.connector and bot_instance.connector.exchange and hasattr(bot_instance.connector.exchange, 'id'):
             exchange = bot_instance.connector.exchange.id
+        # Añadimos sufijo -testnet si procede
+        if getattr(bot_instance, 'active_exchange_use_testnet', False) and exchange:
+            exchange = f"{exchange}-testnet"
         current = bot_instance.calculate_total_equity()
         if current <= 0:
             raise HTTPException(status_code=400, detail="Balance calculado inválido")
@@ -1370,9 +1494,10 @@ def connect_exchange(exchange_name: str):
         ok, msg = bot_instance.connector.connect_with_credentials(api_key, secret_key, passphrase, use_testnet=use_testnet_flag, exchange_type=exchange_type)
         if not ok:
             raise HTTPException(status_code=400, detail=f'No se pudo conectar: {msg}')
-        # Guardar exchange activo en memoria del bot
+        # Guardar exchange activo en memoria del bot y si es testnet
         try:
             bot_instance.active_exchange_name = exchange_name
+            bot_instance.active_exchange_use_testnet = use_testnet_flag
         except Exception:
             pass
 
@@ -1471,7 +1596,10 @@ def exchange_info():
     """Obtiene información del exchange conectado"""
     try:
         if bot_instance and bot_instance.connector and bot_instance.connector.exchange:
-            exchange_name = bot_instance.connector.exchange.id
+            # Preferimos el nombre activo guardado (puede incluir testnet flag)
+            exchange_name = getattr(bot_instance, 'active_exchange_name', None) or bot_instance.connector.exchange.id
+            if getattr(bot_instance, 'active_exchange_use_testnet', False):
+                exchange_name = f"{exchange_name}-testnet"
             return {
                 "exchange": exchange_name.upper(),
                 "connected": True

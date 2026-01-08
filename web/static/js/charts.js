@@ -339,10 +339,27 @@ export function destroyChart(safeSym) {
     const domId = `chart-${safeSym}`;
     if (chartInstances[domId]) {
         try {
-            chartInstances[domId].chart.remove();
+            // compatible con la API de lightweight-charts
+            if (chartInstances[domId].chart && chartInstances[domId].chart.remove) chartInstances[domId].chart.remove();
             delete chartInstances[domId];
             const dom = document.getElementById(domId);
             if(dom) dom.innerHTML = '';
+        } catch(e) { /* silent */ }
+    }
+}
+
+// Destruye un chart por su id de DOM (útil para ECharts y gráficos globales)
+export function destroyChartById(domId) {
+    if (chartInstances[domId]) {
+        try {
+            // ECharts guarda la instancia en chartInstances[domId].echart
+            const inst = chartInstances[domId];
+            if (inst.echart && typeof inst.echart.dispose === 'function') inst.echart.dispose();
+            // también manejamos otras APIs
+            if (inst.chart && typeof inst.chart.remove === 'function') inst.chart.remove();
+            delete chartInstances[domId];
+            const dom = document.getElementById(domId);
+            if (dom) dom.innerHTML = '';
         } catch(e) { /* silent */ }
     }
 }

@@ -35,7 +35,10 @@ async function initializeExchanges() {
                 if (infoRes.ok) {
                     const info = await infoRes.json();
                     if (info.connected && info.exchange) {
-                        select.value = info.exchange.toLowerCase();
+                        // info.exchange puede contener el sufijo -TESTNET; lo eliminamos para coincidir con las opciones
+                        let ex = info.exchange.toLowerCase();
+                        if (ex.endsWith('-testnet')) ex = ex.replace(/-testnet$/, '');
+                        select.value = ex;
                         // Llamar a onExchangeSelected para conectar/mostrar cartera
                         await onExchangeSelected();
                     }
@@ -63,10 +66,14 @@ async function onExchangeSelected() {
             '<p class="text-muted text-center py-4">Selecciona un exchange para consultar</p>';
         return;
     }
+
+
     
     currentExchange = exchangeName;
 
     // Mostrar estado de conexión mientras intentamos conectar
+    // Asegurar que el Dashboard (home) está visible para que las gráficas se rendericen correctamente
+    if (typeof setMode === 'function') setMode('home');
     document.getElementById('exchange-form-container').innerHTML = `
         <div class="text-center py-4">
             <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Cargando...</span></div>
@@ -106,10 +113,34 @@ async function onExchangeSelected() {
             await deleteExchangeConfig(exchangeName);
             document.getElementById('exchange-form-container').innerHTML = '<p class="text-muted text-center py-4">Selecciona un exchange para consultar</p>';
             await loadHome();
+            // Programamos limpieza de caché tras 5s
+            if (window.scheduleCacheClear) window.scheduleCacheClear(null, 5000);
         });
+
+        // Si se ha conectado correctamente, forzamos snapshot inmediato para poblar la gráfica
+        if (d.connected) {
+            try {
+                Swal.fire({title: '📸 Guardando snapshot inicial...', html: 'Obteniendo balance actual... por favor espere', allowOutsideClick: false, showConfirmButton: false, didOpen: () => Swal.showLoading()});
+                const snapRes = await fetch('/api/record_balance', { method: 'POST' });
+                const snapData = await snapRes.json().catch(()=>({}));
+                Swal.close();
+                if (snapRes.ok && snapData && snapData.success) {
+                    Swal.fire({toast: true, position: 'top-end', icon: 'success', title: `Snapshot: ${snapData.balance} USDC`, showConfirmButton: false, timer: 1500});
+                } else {
+                    Swal.fire({toast: true, position: 'top-end', icon: 'warning', title: 'No se pudo guardar snapshot', showConfirmButton: false, timer: 1500});
+                }
+            } catch (e) {
+                Swal.close();
+                Swal.fire({toast: true, position: 'top-end', icon: 'error', title: 'Error al guardar snapshot', showConfirmButton: false, timer: 1500});
+            }
+        }
 
         // Recargar datos del dashboard para mostrar cartera del exchange
         if (typeof loadHome === 'function') await loadHome();
+
+        // Programamos la limpieza de caché y recarga completa tras 5s (por si hay otros paneles activos)
+        // Usamos solo la tarea programada para evitar recargas dobles
+        if (window.scheduleCacheClear) window.scheduleCacheClear(exchangeName.toLowerCase(), 5000);
 
     } catch (error) {
         console.error('Error conectando:', error);
@@ -204,6 +235,12 @@ async function performAddExchange() {
             
             // Recargar lista de exchanges
             await initializeExchanges();
+            // Seleccionar automáticamente el exchange añadido y cargar su panel
+            const select = document.getElementById('exchange-select');
+            if (select) {
+                select.value = exchangeName.toLowerCase();
+                await onExchangeSelected();
+            }
         } else {
             errorDiv.textContent = data.message || 'Error al guardar el exchange';
             errorDiv.classList.remove('d-none');

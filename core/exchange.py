@@ -333,7 +333,98 @@ class BinanceConnector:
         except Exception as e:
             self._handle_api_error(e, f"price {symbol}")
             return 0.0
+    @staticmethod
+    def fetch_balance_snapshot_static(api_key, secret_key, passphrase=None, use_testnet=False, exchange_type='binance'):
+        """Crea una instancia temporal de ccxt con las credenciales proporcionadas y devuelve el equity total aproximado en USDC.
+        Devuelve None si no se puede obtener el balance o ocurre un error.
+        """
+        try:
+            # Construir instancia mínima de exchange
+            if exchange_type == 'bitget':
+                exch = ccxt.bitget({'apiKey': api_key, 'secret': secret_key, 'password': passphrase or '', 'enableRateLimit': True, 'timeout': 30000})
+            else:
+                exch = ccxt.binance({'apiKey': api_key, 'secret': secret_key, 'enableRateLimit': True, 'timeout': 30000, 'options': {'defaultType': 'spot', 'adjustForTimeDifference': True}})
 
+            if use_testnet and exchange_type == 'binance':
+                try:
+                    exch.set_sandbox_mode(True)
+                except Exception:
+                    pass
+                try:
+                    if 'api' not in exch.urls:
+                        exch.urls['api'] = {}
+                    exch.urls['api']['public'] = 'https://testnet.binance.vision/api/v3'
+                    exch.urls['api']['private'] = 'https://testnet.binance.vision/api/v3'
+                    exch.urls['api']['fapiPublic'] = 'https://testnet.binancefuture.com/fapi/v1'
+                    exch.urls['api']['fapiPrivate'] = 'https://testnet.binancefuture.com/fapi/v1'
+                except Exception:
+                    pass
+
+            # Intento de fetch balance
+            try:
+                balance = exch.fetch_balance()
+            except Exception as e:
+                log.debug(f"fetch_balance failed (static): {e}")
+                return None
+
+            total_usdc = 0.0
+            totals = balance.get('total', {}) if isinstance(balance, dict) else {}
+            if 'USDC' in totals:
+                total_usdc += float(totals.get('USDC', 0.0) or 0.0)
+            if 'USDT' in totals:
+                total_usdc += float(totals.get('USDT', 0.0) or 0.0)
+
+            # Obtener tickers para convertir otras monedas
+            tickers = {}
+            try:
+                tickers = exch.fetch_tickers()
+            except Exception:
+                tickers = {}
+
+            for asset, qty in totals.items():
+                try:
+                    qty_f = float(qty or 0.0)
+                except Exception:
+                    qty_f = 0.0
+                if qty_f <= 0:
+                    continue
+                if asset in ['USDC', 'USDT']:
+                    continue
+
+                # Intentar par contra USDC primero, luego USDT
+                price = None
+                for quote in ['USDC', 'USDT']:
+                    pair = f"{asset}/{quote}"
+                    if pair in tickers and tickers[pair].get('last'):
+                        price = float(tickers[pair]['last'])
+                        break
+                    try:
+                        t = exch.fetch_ticker(pair)
+                        if t and t.get('last'):
+                            price = float(t.get('last'))
+                            break
+                    except Exception:
+                        continue
+
+                if price:
+                    total_usdc += qty_f * price
+                else:
+                    # Si no hay precio, intentamos con mercado inverso (USDC/ASSET)
+                    for quote in ['USDC', 'USDT']:
+                        pair = f"{quote}/{asset}"
+                        try:
+                            t = exch.fetch_ticker(pair)
+                            if t and t.get('last'):
+                                # invertimos
+                                total_usdc += qty_f / float(t.get('last'))
+                                break
+                        except Exception:
+                            continue
+
+            return total_usdc
+        except Exception as e:
+            log.debug(f"fetch_balance_snapshot_static error: {e}")
+            return None
     def place_order(self, symbol, side, amount, price):
         if not self.exchange:
             return None

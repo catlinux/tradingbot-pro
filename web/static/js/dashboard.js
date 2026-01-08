@@ -5,7 +5,7 @@
  */
 
 import { fmtUSDC, fmtPrice, fmtInt, fmtCrypto, fmtPct, updateColorValue } from './utils.js';
-import { renderDonut, renderLineChart, renderCandleChart, renderEChart, resetChartZoom, destroyChart } from './charts.js';
+import { renderDonut, renderLineChart, renderCandleChart, renderEChart, resetChartZoom, destroyChart, destroyChartById } from './charts.js';
 import { loadConfigForm, saveConfigForm, toggleCard, changeRsiTf, applyStrategy, setManual, analyzeSymbol } from './config.js';
 
 // --- ESTADO GLOBAL ---
@@ -158,10 +158,40 @@ async function init() {
             syncTabs(data.active_pairs);
         }
         
-        // Registrar snapshot de balance cada 30 segundos para historial de gráficas
-        setInterval(recordBalanceSnapshot, 30000);
+        // Registrar snapshot de balance cada 60 segundos para historial de gráficas (Exchange conectado)
+        setInterval(recordBalanceSnapshot, 60000);
         
-        
+        // Exponer función global para limpiar caché y forzar recarga de gráficas al cambiar de exchange
+        // Debounced cache clear + reload to avoid overlapping refreshes
+        window.scheduleCacheClear = function(exName, delay=5000) {
+            try { if (window._scheduleCacheTimer) clearTimeout(window._scheduleCacheTimer); } catch(e){}
+            window._scheduleCacheTimer = setTimeout(async () => {
+                try {
+                    // Asegurar vista dashboard visible
+                    if (typeof setMode === 'function') setMode('home');
+                    // Limpiar cachés
+                    dataCache = {};
+                    localStorage.removeItem('gridbot_vip_last_update');
+
+                    // Forzar recarga del dashboard y gráficas (force=true)
+                    if (typeof loadHome === 'function') await loadHome();
+
+                    // Evitar concurrencia en la carga de gráficas
+                    if (typeof loadBalanceCharts === 'function') {
+                        if (!window._loadBalanceChartsInFlight) {
+                            await loadBalanceCharts(exName || null, true);
+                        } else {
+                            console.debug('loadBalanceCharts ya en curso, saltando recarga forzada');
+                        }
+                    }
+
+                    // Destruir ECharts si aún existen para forzar re-render limpio
+                    try { destroyChartById('balanceChartSession'); destroyChartById('balanceChartHistory'); destroyChartById('balanceChartGlobal'); } catch(e){}
+                    try { Swal.fire({toast: true, position: 'top-end', icon: 'info', title: 'Caché web actualizada', showConfirmButton: false, timer: 1500}); } catch(e){}
+                } catch (err) { console.error('Error al limpiar caché y recargar:', err); }
+            }, delay);
+        }
+
         loadHome();
     } catch (e) { console.error("❌ Error init:", e); }
 }
@@ -528,6 +558,69 @@ async function loadHome() {
         const serviceOnline = data.service === 'online';
         const uptimeSec = data.stats?.session?.uptime_seconds ?? null;
 
+        // Rellenar el desplegable de exchanges para la gráfica de Balance total (histórico)
+        try {
+            const exchRes = await fetch('/api/exchanges/list');
+            if (exchRes.ok) {
+                const exData = await exchRes.json();
+                const sel = document.getElementById('exchangeSelect');
+                if (sel) {
+                    // Limpiar opciones actuales y añadir una por cada exchange configurado
+                    const prev = localStorage.getItem('balance_chart_exchange');
+                    sel.innerHTML = '';
+                    if (exData.success && Array.isArray(exData.exchanges) && exData.exchanges.length > 0) {
+                        exData.exchanges.forEach(e => {
+                            const opt = document.createElement('option');
+                            opt.value = e.name.toLowerCase();
+                            let label = e.name.charAt(0).toUpperCase() + e.name.slice(1);
+                            if (e.use_testnet) label += ' (Testnet)';
+                            opt.textContent = label;
+                            sel.appendChild(opt);
+                        });
+                    } else {
+                        // Fallback: mantener Binance
+                        const opt = document.createElement('option');
+                        opt.value = 'binance';
+                        opt.textContent = 'Binance';
+                        sel.appendChild(opt);
+                    }
+
+                    // Restaurar selección anterior si existe
+                    let selectedValue = null;
+                    if (prev && Array.from(sel.options).some(o => o.value === prev)) {
+                        selectedValue = prev;
+                    } else {
+                        // Intentar usar exchange activo del servidor
+                        try {
+                            const infoRes = await fetch('/api/exchange/info');
+                            if (infoRes.ok) {
+                                const info = await infoRes.json();
+                                if (info.connected && info.exchange) {
+                                    let ex = info.exchange.toLowerCase();
+                                    if (ex.endsWith('-testnet')) ex = ex.replace(/-testnet$/, '');
+                                    if (Array.from(sel.options).some(o => o.value === ex)) selectedValue = ex;
+                                }
+                            }
+                        } catch(e) { /* ignore */ }
+                    }
+
+                    if (!selectedValue && sel.options.length > 0) selectedValue = sel.options[0].value;
+                    if (selectedValue) {
+                        sel.value = selectedValue;
+                        localStorage.setItem('balance_chart_exchange', selectedValue);
+                    }
+
+                    // Manejar cambio inmediato para recargar la gráfica del histórico y persistir selección
+                    sel.onchange = async function() {
+                        localStorage.setItem('balance_chart_exchange', this.value);
+                        await loadBalanceCharts(this.value, true);
+                    }
+                }
+            }
+        } catch (e) {
+            console.debug('No se pudo cargar lista de exchanges para el desplegable:', e);
+        }
+
         if (elStatus) {
             const status = String(data.status || '--');
             let statusClass = 'offline';
@@ -830,10 +923,52 @@ function updateAccountBadge(info) {
 }
 
 async function loadGlobalOrders() { try { const res = await fetch('/api/orders'); const orders = await res.json(); const tbody = document.getElementById('global-orders-table'); if(orders.length === 0) { tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-3">No hay órdenes</td></tr>'; return; } orders.sort((a,b) => a.symbol.localeCompare(b.symbol) || b.price - a.price); tbody.innerHTML = orders.map(o => { const isBuy = o.side === 'buy'; let pnlDisplay = '-', pnlClass = ''; if(!isBuy && o.entry_price > 0) { const pnl = ((o.current_price - o.entry_price)/o.entry_price)*100; pnlDisplay = fmtPct(pnl); pnlClass = pnl>=0 ? 'text-success fw-bold':'text-danger fw-bold'; } return `<tr><td class="fw-bold">${o.symbol}</td><td><span class="badge ${isBuy?'bg-success':'bg-danger'}">${isBuy?'COMPRA':'VENTA'}</span></td><td>${fmtPrice(o.price)}</td><td class="text-muted">${isBuy?'-':fmtPrice(o.entry_price)}</td><td>${fmtPrice(o.current_price)}</td><td class="${pnlClass}">${pnlDisplay}</td><td>${fmtUSDC(o.total_value)}</td><td class="text-end"><button class="btn btn-sm btn-outline-secondary" onclick="closeOrder('${o.symbol}','${o.id}','${o.side}',${o.amount})"><i class="fa-solid fa-times"></i></button></td></tr>`; }).join(''); } catch(e) {} }
-async function loadBalanceCharts() { 
-    try { 
-        
-        const res = await fetch('/api/history/balance'); 
+async function loadBalanceCharts(exchange=null, force=false) {
+    // Evitar ejecuciones concurrentes que provoquen múltiples fetchs y renderizados
+    if (window._loadBalanceChartsInFlight && !force) {
+        console.debug('loadBalanceCharts in flight, skipping');
+        return;
+    }
+    window._loadBalanceChartsInFlight = true;
+
+    try {
+        // Si no se pasa exchange, intentar leer la selección persistida (localStorage) o el seleccionado en el UI
+        if (!exchange) {
+            const stored = localStorage.getItem('balance_chart_exchange');
+            if (stored) {
+                exchange = stored;
+            } else {
+                // Fallback a UI select (puede ser 'exchangeSelect' o 'exchange-select')
+                const sel = document.getElementById('exchangeSelect') || document.getElementById('exchange-select');
+                if (sel && sel.value) exchange = sel.value;
+            }
+        }
+
+        // Si se fuerza la recarga, destruimos los charts existentes para forzar render limpio
+        if (force) {
+            try {
+                destroyChartById('balanceChartSession');
+                destroyChartById('balanceChartHistory');
+                destroyChartById('balanceChartGlobal');
+            } catch(e) { /* silent */ }
+        }
+
+        // Determinar label legible (añadir indicador Testnet si aplica)
+        let displayName = exchange || '';
+        if (exchange) {
+            try {
+                const cfgRes = await fetch(`/api/exchanges/get/${encodeURIComponent(exchange)}`);
+                if (cfgRes.ok) {
+                    const cfg = await cfgRes.json();
+                    if (cfg.use_testnet) displayName = `${displayName} (testnet)`;
+                }
+            } catch(e) {
+                // ignore
+            }
+        }
+
+        const url = exchange ? `/api/history/balance?exchange=${encodeURIComponent(exchange)}` : '/api/history/balance';
+        const res = await fetch(url);
         
         if (!res.ok) {
             console.error("❌ Error fetching balance history:", res.status);
@@ -845,14 +980,17 @@ async function loadBalanceCharts() {
         fullGlobalHistory = filterBalancePikes(data.global); 
         
         // Solo renderizar con ECharts (mucho mejor control de escala)
-        renderEChart('balanceChartSession', data.session, '#0ecb81', 'Balance Sesión');
-        renderEChart('balanceChartHistory', fullGlobalHistory, '#3b82f6', 'Balance Total');
-        renderEChart('balanceChartGlobal', fullGlobalHistory, '#3b82f6', 'Balance Global');
+        const exLabel = displayName ? ` (${displayName.toUpperCase()})` : '';
+        renderEChart('balanceChartSession', data.session, '#0ecb81', `Balance Sesión${exLabel}`);
+        renderEChart('balanceChartHistory', fullGlobalHistory, '#3b82f6', `Balance Total${exLabel}`);
+        renderEChart('balanceChartGlobal', fullGlobalHistory, '#3b82f6', `Balance Global${exLabel}`);
         
         
     } catch(e) { 
         console.error("❌ Error loading charts:", e); 
-    } 
+    } finally {
+        try { window._loadBalanceChartsInFlight = false; } catch(e) {}
+    }
 }
 async function closeOrder(s, i, side, a) { const result = await Swal.fire({ title: '¿Cancelar Orden?', text: `${side.toUpperCase()} ${s} - Cantidad: ${a}`, icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Sí, cancelar' }); if (result.isConfirmed) { postAction('/api/close_order', { symbol: s, order_id: i, side: side, amount: a }); } }
 async function liquidateAsset(a) { const result = await Swal.fire({ title: `¿Liquidar ${a}?`, text: "Se cancelarán las órdenes y se venderá todo a mercado.", icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', confirmButtonText: 'Sí, vender todo' }); if (result.isConfirmed) { postAction('/api/liquidate_asset', { asset: a }, loadWallet); } }

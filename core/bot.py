@@ -56,7 +56,8 @@ class GridBot:
 
     def _data_collector_loop(self):
         while self.is_running:
-            if self.is_paused or not self.connector.exchange:
+            # Si está en pausa, no hacemos nada; si está desconectado seguimos ejecutando para poder tomar snapshots de exchanges configurados
+            if self.is_paused:
                 time.sleep(1)
                 continue
             
@@ -125,17 +126,83 @@ class GridBot:
                     pass
                 time.sleep(1) 
             
-            if int(time.time()) % 60 == 0:
+            # Snapshots programados:
+            # - Exchange conectado: cada 60s
+            # - Exchanges desconectados: cada 180s (3 minutos) para reducir uso de rate limits
+            now_ts = int(time.time())
+            # 1) Exchange activo: cada 60s
+            if now_ts % 60 == 0:
                 try:
                     total_equity = self.calculate_total_equity()
                     if total_equity > 0:
                         ex_id = 'unknown'
                         try:
-                            if self.connector and self.connector.exchange and hasattr(self.connector.exchange, 'id'):
-                                ex_id = self.connector.exchange.id
+                            if hasattr(self, 'active_exchange_name') and self.active_exchange_name:
+                                ex_id = self.active_exchange_name
+                                if getattr(self, 'active_exchange_use_testnet', False):
+                                    ex_id = f"{ex_id}-testnet"
+                            else:
+                                # Fallback: usar id interno de ccxt si está disponible
+                                if self.connector and self.connector.exchange and hasattr(self.connector.exchange, 'id'):
+                                    ex_id = self.connector.exchange.id
                         except Exception:
                             pass
+                        # Snapshot del exchange activo
                         self.db.log_balance_snapshot(total_equity, exchange=ex_id)
+                except Exception:
+                    pass
+
+            # 2) Exchanges desconectados: cada 180s
+            if now_ts % 180 == 0:
+                try:
+                    exchanges = self.db.get_exchanges()
+                    for e in exchanges:
+                        name = e.get('name')
+                        use_testnet = e.get('use_testnet', False)
+                        ex_key = f"{name}-testnet" if use_testnet else name
+
+                        # Saltar si es el exchange activo (ya fue procesado cada 60s)
+                        try:
+                            active_id = 'unknown'
+                            if hasattr(self, 'active_exchange_name') and self.active_exchange_name:
+                                active_id = self.active_exchange_name
+                                if getattr(self, 'active_exchange_use_testnet', False):
+                                    active_id = f"{active_id}-testnet"
+                            elif self.connector and self.connector.exchange and hasattr(self.connector.exchange, 'id'):
+                                active_id = self.connector.exchange.id
+                        except Exception:
+                            active_id = 'unknown'
+
+                        if ex_key == active_id:
+                            continue
+
+                        taken = False
+                        # Intentar obtener credenciales y hacer fetch real
+                        try:
+                            creds = self.db.get_exchange_credentials(name)
+                            if creds.get('success') and creds.get('api_key') and creds.get('secret_key'):
+                                fetched = BinanceConnector.fetch_balance_snapshot_static(creds.get('api_key'), creds.get('secret_key'), creds.get('passphrase'), use_testnet, exchange_type=e.get('type', 'binance'))
+                                if fetched and fetched > 0:
+                                    self.db.log_balance_snapshot(fetched, exchange=ex_key)
+                                    log.debug(f"Snapshot real para {ex_key}: {fetched:.2f} USDC")
+                                    taken = True
+                                    # pequeña espera para no pisar rate limits
+                                    time.sleep(0.5)
+                        except Exception as inner_e:
+                            log.debug(f"No se pudo obtener snapshot real para {ex_key}: {inner_e}")
+
+                        if taken:
+                            continue
+
+                        # Fallback: carry-forward si existe última snapshot
+                        try:
+                            last = self.db.get_last_balance_snapshot(ex_key)
+                            if last:
+                                last_equity = float(last[1])
+                                self.db.log_balance_snapshot(last_equity, exchange=ex_key)
+                                log.debug(f"Carry-forward snapshot para {ex_key}: {last_equity:.2f} USDC")
+                        except Exception:
+                            pass
                 except Exception:
                     pass
     
